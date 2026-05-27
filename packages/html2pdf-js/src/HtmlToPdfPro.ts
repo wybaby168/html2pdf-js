@@ -1339,11 +1339,11 @@ function paintFormControl(
   if (!value) return;
 
   context.save();
-  context.font = canvasFontFromStyle(style);
+  context.font = canvasFontFromStyle(style, layout.zoom);
   context.fillStyle = safeCanvasColor(style.color, '#111827');
   context.textBaseline = 'alphabetic';
-  const paddingLeft = parseCssLengthToPx(style.paddingLeft || '0');
-  const fontSize = Math.max(1, parseCssLengthToPx(style.fontSize || '12px'));
+  const paddingLeft = parseCssLengthToPx(style.paddingLeft || '0') * layout.zoom;
+  const fontSize = Math.max(1, parseCssLengthToPx(style.fontSize || '12px') * layout.zoom);
   const x = rect.x + paddingLeft;
   const y = rect.y + rect.height / 2 + fontSize * 0.35;
   context.fillText(value, x, y, Math.max(1, rect.width - paddingLeft * 2));
@@ -1368,7 +1368,7 @@ function paintTextNode(
   let offset = 0;
 
   context.save();
-  context.font = canvasFontFromStyle(style);
+  context.font = canvasFontFromStyle(style, layout.zoom);
   context.fillStyle = safeCanvasColor(style.color, '#111827');
   context.textBaseline = 'alphabetic';
 
@@ -1702,13 +1702,13 @@ function safeCanvasColor(value: string, fallback: string): string {
   return color;
 }
 
-function canvasFontFromStyle(style: CSSStyleDeclaration): string {
+function canvasFontFromStyle(style: CSSStyleDeclaration, scale = 1): string {
   const fontStyle = style.fontStyle && style.fontStyle !== 'normal' ? style.fontStyle : '';
   const fontVariant = style.fontVariant && style.fontVariant !== 'normal' ? style.fontVariant : '';
   const fontWeight = style.fontWeight || '400';
-  const fontSize = style.fontSize || '12px';
+  const fontSizePx = Math.max(1, parseCssLengthToPx(style.fontSize || '12px') * scale);
   const fontFamily = style.fontFamily || 'sans-serif';
-  return [fontStyle, fontVariant, fontWeight, fontSize, fontFamily].filter(Boolean).join(' ');
+  return [fontStyle, fontVariant, fontWeight, `${fontSizePx}px`, fontFamily].filter(Boolean).join(' ');
 }
 
 function paintHeaderFooterCanvas(

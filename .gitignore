@@ -2,9 +2,11 @@ node_modules/
 dist/
 packages/*/dist/
 *.tgz
+*.bundle
 .vercel/
 .env
 .env.*
 .DS_Store
 *.log
 coverage/
+.playwright-mcp/

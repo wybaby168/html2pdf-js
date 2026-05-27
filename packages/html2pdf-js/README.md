@@ -1,6 +1,6 @@
 # @flyfish-dev/html2pdf-js
 
-Self-contained TypeScript HTML to PDF engine for browser applications. It exports high-fidelity visual PDF pages and overlays a transparent Unicode text layer so generated files remain copyable and searchable.
+Self-contained TypeScript HTML to PDF engine for browser applications. It exports high-fidelity visual PDF pages and overlays a embedded selectable Unicode text layer so generated files remain copyable and searchable.
 
 This package does **not** depend on IronPress, html2canvas, jsPDF, Paged.js, Puppeteer, or the browser print dialog.
 
@@ -58,7 +58,7 @@ The default engine is `dom-canvas-text`:
 4. Compute page slices with built-in pagination rules.
 5. Render each page visually with the built-in DOM Canvas Painter, without html2canvas or SVG foreignObject screenshots.
 6. Extract text boxes with `Range.getClientRects()`.
-7. Write the PDF directly with image XObjects, invisible Unicode text layer, link annotations, and bookmarks.
+7. Write the PDF directly with image XObjects, embedded selectable Unicode text layer, link annotations, and bookmarks.
 
 ## License
 

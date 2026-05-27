@@ -52,6 +52,21 @@ async function getJson(url) {
   return response.json();
 }
 
+
+function assertSelectablePdfStructure(pdfBytes, label) {
+  const text = pdfBytes.toString('latin1');
+  if (text.includes('/Subtype /Type3')) throw new Error(`${label}: Type3 fonts are not allowed for the selectable text layer.`);
+  if (/\b3\s+Tr\b/.test(text)) throw new Error(`${label}: invisible text rendering mode 3 Tr is not allowed.`);
+  for (const marker of ['/Subtype /Type0', '/Subtype /CIDFontType2', '/FontFile2', '/ToUnicode', '/ActualText']) {
+    if (!text.includes(marker)) throw new Error(`${label}: missing PDF selectable text marker ${marker}.`);
+  }
+  const firstText = text.indexOf('/ActualText');
+  const firstImage = text.indexOf('/Im1 Do');
+  if (firstText < 0 || firstImage < 0 || firstText > firstImage) {
+    throw new Error(`${label}: selectable text must be written before the visual image layer.`);
+  }
+}
+
 function decodePdfFromResult(text) {
   const match = text.match(/PDF_BASE64=([A-Za-z0-9+/=]+)\nEND_PDF_BASE64/);
   if (!match) throw new Error(`No PDF base64 in browser result:\n${text.slice(0, 600)}`);
@@ -174,6 +189,7 @@ async function main() {
     if (!text.startsWith('OK\n')) throw new Error(`Browser PDF generation failed or timed out:\n${text}\nChrome stderr:\n${stderr}`);
     const bytes = decodePdfFromResult(text);
     if (bytes.length < 20000) throw new Error(`Generated PDF is unexpectedly small: ${bytes.length} bytes`);
+    assertSelectablePdfStructure(bytes, 'browser-smoke.pdf');
     await writeFile(pdfPath, bytes);
 
     await send('Browser.close').catch(() => {});
@@ -187,6 +203,11 @@ async function main() {
   if (!/PDF version:\s+1\.7\b/.test(info)) throw new Error(`Expected PDF 1.7. pdfinfo output:\n${info}`);
 
   const extracted = runRequired('pdftotext', [pdfPath, '-']);
+  const bbox = runRequired('pdftotext', ['-bbox', pdfPath, '-']);
+  if (!bbox.includes('Selectable Text Smoke Test')) {
+    throw new Error(`Missing selectable bounding boxes for browser smoke text. BBox output:
+${bbox.slice(0, 1000)}`);
+  }
   await writeFile(txtPath, extracted);
   const normalized = extracted.replace(/\s+/g, ' ').trim();
   for (const marker of [

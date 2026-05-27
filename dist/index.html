@@ -41,7 +41,7 @@
           本报告用于验证 HtmlToPdfPro 的高保真 HTML 输出能力：浏览器完成真实布局测量，组件自行分页、渲染视觉层、计算文字坐标，并组装 PDF。
         </p>
         <p class="quote">
-          当前实现主链路已经脱离 html2canvas / jsPDF / Paged.js / IronPress：页面视觉由组件读取 DOM 布局和 computed style 后进入自研 Canvas Painter 导出管线，PDF 中叠加透明文字层，支持复制、搜索与链接点击。
+          当前实现主链路已经脱离 html2canvas / jsPDF / Paged.js / IronPress：页面视觉由组件读取 DOM 布局和 computed style 后进入自研 Canvas Painter 导出管线，PDF 中写入可选文字层，支持复制、搜索与链接点击。
         </p>
       </section>
 

@@ -1385,14 +1385,24 @@ function extractPageText(layout, page, totalPages, options) {
             const yTop = layout.metrics.margin.top + (topInSource - page.startY) * layout.zoom;
             const yPx = yTop + rect.height * layout.zoom * 0.78;
             const lineKey = Math.round(yPx * 2) / 2;
+            const widthPx = Math.max(1, rect.width * layout.zoom);
+            const heightPx = Math.max(1, rect.height * layout.zoom);
             const line = lines.get(lineKey) ?? [];
-            line.push({ text: token.text, xPx, yPx, order: line.length });
+            line.push({ text: token.text, xPx, yPx, widthPx, heightPx, order: line.length });
             lines.set(lineKey, line);
         }
         for (const line of Array.from(lines.values()).sort((a, b) => (a[0]?.yPx ?? 0) - (b[0]?.yPx ?? 0))) {
             const sorted = line.sort((a, b) => a.xPx - b.xPx || a.order - b.order);
             for (const chunk of chunkExtractionLine(sorted)) {
-                glyphs.push({ text: chunk.text, pageIndex: page.index, xPx: chunk.xPx, yPx: chunk.yPx, fontSizePx: fontSize });
+                glyphs.push({
+                    text: chunk.text,
+                    pageIndex: page.index,
+                    xPx: chunk.xPx,
+                    yPx: chunk.yPx,
+                    widthPx: chunk.widthPx,
+                    heightPx: chunk.heightPx,
+                    fontSizePx: fontSize
+                });
             }
         }
     }
@@ -1405,12 +1415,16 @@ function chunkExtractionLine(tokens) {
     let current = '';
     let xPx = tokens[0]?.xPx ?? 0;
     let yPx = tokens[0]?.yPx ?? 0;
-    const max = 60;
+    let widthPx = 0;
+    let heightPx = tokens[0]?.heightPx ?? 0;
+    const max = 80;
     const flush = () => {
-        const text = current.trimEnd();
-        if (text)
-            chunks.push({ text, xPx, yPx });
+        const text = current;
+        if (text.trim())
+            chunks.push({ text, xPx, yPx, widthPx: Math.max(1, widthPx), heightPx: Math.max(1, heightPx) });
         current = '';
+        widthPx = 0;
+        heightPx = 0;
     };
     for (const token of tokens) {
         const pieces = splitExtractionToken(token.text);
@@ -1426,6 +1440,9 @@ function chunkExtractionLine(tokens) {
                 yPx = token.yPx;
             }
             current += piece;
+            const tokenEnd = token.xPx + token.widthPx;
+            widthPx = Math.max(widthPx, tokenEnd - xPx);
+            heightPx = Math.max(heightPx, token.heightPx);
         }
     }
     flush();
@@ -1473,7 +1490,7 @@ function appendLineGlyphs(glyphs, layout, config, pageNumber, totalPages, slot) 
     const y = slot === 'header'
         ? Math.max(4, layout.metrics.margin.top / 2 + size / 2)
         : layout.metrics.heightPx - Math.max(4, layout.metrics.margin.bottom / 2 - size / 2);
-    glyphs.push({ text, pageIndex: pageNumber - 1, xPx: x, yPx: y, fontSizePx: size });
+    glyphs.push({ text, pageIndex: pageNumber - 1, xPx: x, yPx: y, widthPx: estimatedWidth, heightPx: size * 1.2, fontSizePx: size });
 }
 function extractPageLinks(layout, page) {
     const rootRect = layout.root.getBoundingClientRect();
@@ -1596,21 +1613,42 @@ class PdfBuilder {
         return output;
     }
 }
+const TEXT_LAYER_FONT_BASE64 = 'AAEAAAAKAIAAAwAgT1MvMkVkReAAAAEoAAAAYGNtYXAADABzAAABkAAAADRnbHlmAAAAAAAAAcwAAAABaGVhZCuO3DoAAACsAAAANmhoZWEDcgMOAAAA5AAAACRobXR4A+gAAAAAAYgAAAAGbG9jYQAAAAAAAAHEAAAABm1heHAAAwACAAABCAAAACBuYW1l92sHpgAAAdAAAAG5cG9zdG1/dc8AAAOMAAAALAABAAAAAQAA6wtUQ18PPPUAAwPoAAAAAOY8Ta0AAAAA5jxNrQAAAAAAAAAAAAAAAwACAAAAAAAAAAEAAANw/yQAAAPoAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAEAAAACAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAwPoAZAABQAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAPz8/PwAAACAAIANw/yQAAANwANwAAAAAAAAAAAAAAAAAAAAgAAAD6AAAAAAAAAAAAAIAAAADAAAAFAADAAEAAAAUAAQAIAAAAAQABAABAAAAIP//AAAAIP///+EAAQAAAAAAAAAAAAAAAAAAAAAAAAAMAJYAAQAAAAAAAQAVAAAAAQAAAAAAAgAHABUAAQAAAAAAAwAdABwAAQAAAAAABAAdADkAAQAAAAAABQALAFYAAQAAAAAABgAdABwAAwABBAkAAQAqAGEAAwABBAkAAgAOAIsAAwABBAkAAwA6AJkAAwABBAkABAA6ANMAAwABBAkABQAWAQ0AAwABBAkABgA6AJlIdG1sVG9QZGZQcm9UZXh0TGF5ZXJSZWd1bGFySHRtbFRvUGRmUHJvVGV4dExheWVyLVJlZ3VsYXJIdG1sVG9QZGZQcm9UZXh0TGF5ZXIgUmVndWxhclZlcnNpb24gMS4wAEgAdABtAGwAVABvAFAAZABmAFAAcgBvAFQAZQB4AHQATABhAHkAZQByAFIAZQBnAHUAbABhAHIASAB0AG0AbABUAG8AUABkAGYAUAByAG8AVABlAHgAdABMAGEAeQBlAHIALQBSAGUAZwB1AGwAYQByAEgAdABtAGwAVABvAFAAZABmAFAAcgBvAFQAZQB4AHQATABhAHkAZQByACAAUgBlAGcAdQBsAGEAcgBWAGUAcgBzAGkAbwBuACAAMQAuADAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAABAgVnbHlwaA==';
+let cachedTextLayerFontBytes;
+function getTextLayerFontBytes() {
+    if (cachedTextLayerFontBytes)
+        return cachedTextLayerFontBytes;
+    const binary = atob(TEXT_LAYER_FONT_BASE64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1)
+        bytes[i] = binary.charCodeAt(i) & 0xff;
+    cachedTextLayerFontBytes = bytes;
+    return bytes;
+}
+function createCidToGidMap(maxCid) {
+    const bytes = new Uint8Array((maxCid + 1) * 2);
+    for (let cid = 1; cid <= maxCid; cid += 1) {
+        const offset = cid * 2;
+        bytes[offset] = 0;
+        bytes[offset + 1] = 1;
+    }
+    return bytes;
+}
 function buildPdf(pages, bookmarks, metrics, options) {
     const pdf = new PdfBuilder();
     const pagesObjectId = pdf.reserve();
-    const fontSubsets = createFonts(pdf, pages.flatMap((page) => page.glyphs.map((glyph) => glyph.text)));
+    const textFont = createUnicodeTextFont(pdf, collectPdfTextCharacters(pages));
     const pageObjectIds = [];
     for (const [index, page] of pages.entries()) {
         const imageObjectId = pdf.add(pdf.stream(`/Type /XObject /Subtype /Image /Width ${page.imageWidth} /Height ${page.imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode`, page.imageBytes));
         const annotationIds = page.links.map((link) => pdf.add(createLinkAnnotation(link, metrics)));
-        const contentObjectId = pdf.add(pdf.stream('', createContentStream(page, index, imageObjectId, fontSubsets, metrics)));
+        const contentObjectId = pdf.add(pdf.stream('', createContentStream(page, index, imageObjectId, textFont, metrics)));
         const annots = annotationIds.length ? `/Annots [${annotationIds.map((id) => `${id} 0 R`).join(' ')}]` : '';
         const pageObjectId = pdf.add([
             '<< /Type /Page',
             `/Parent ${pagesObjectId} 0 R`,
             `/MediaBox [0 0 ${pdfNumber(metrics.widthPt)} ${pdfNumber(metrics.heightPt)}]`,
-            `/Resources << /XObject << /Im${index + 1} ${imageObjectId} 0 R >> /Font << ${fontSubsets.map((font) => `/F${font.id} ${font.fontObjectId} 0 R`).join(' ')} >> >>`,
+            `/Resources << /XObject << /Im${index + 1} ${imageObjectId} 0 R >> /Font << /F${textFont.id} ${textFont.fontObjectId} 0 R >> >>`,
             `/Contents ${contentObjectId} 0 R`,
             annots,
             '>>'
@@ -1622,74 +1660,97 @@ function buildPdf(pages, bookmarks, metrics, options) {
     const catalogId = pdf.add(`<< /Type /Catalog /Pages ${pagesObjectId} 0 R${outlineRootId ? ` /Outlines ${outlineRootId} 0 R /PageMode /UseOutlines` : ''} >>`);
     return pdf.build(catalogId);
 }
-function createContentStream(page, pageIndex, imageObjectId, fonts, metrics) {
-    const commands = [
-        'q',
-        `${pdfNumber(metrics.widthPt)} 0 0 ${pdfNumber(metrics.heightPt)} 0 0 cm`,
-        `/Im${pageIndex + 1} Do`,
-        'Q'
-    ];
+function collectPdfTextCharacters(pages) {
+    const chars = [];
+    for (const page of pages) {
+        for (const glyph of page.glyphs)
+            chars.push(...segmentText(glyph.text));
+    }
+    return chars.length ? chars : [' '];
+}
+function createContentStream(page, pageIndex, imageObjectId, font, metrics) {
+    const commands = [];
+    // Place a normal, selectable Unicode text layer first, then paint the visual JPEG page on top.
+    // This follows the same layering idea as OCR PDFs: the user sees the high-fidelity raster layer,
+    // while PDF viewers can still hit-test, select, search and copy the real text objects underneath.
     if (page.glyphs.length) {
-        commands.push('q');
+        commands.push('q', '0 0 0 rg');
         for (const glyph of page.glyphs) {
-            const font = findFontSubset(fonts, glyph.text);
-            if (!font)
-                continue;
-            const code = font.charToCode.get(glyph.text);
-            if (!code)
+            const encoded = encodePdfGlyphText(glyph.text, font);
+            if (!encoded)
                 continue;
             const x = pxToPt(glyph.xPx, metrics.widthPx, metrics.widthPt);
             const y = metrics.heightPt - pxToPt(glyph.yPx, metrics.heightPx, metrics.heightPt);
-            const fontSize = pxToPt(glyph.fontSizePx, metrics.widthPx, metrics.widthPt);
-            commands.push('BT', '3 Tr', `/F${font.id} ${pdfNumber(fontSize)} Tf`, `1 0 0 1 ${pdfNumber(x)} ${pdfNumber(y)} Tm`, `<${code.toString(16).padStart(2, '0').toUpperCase()}> Tj`, 'ET');
+            const fontSize = Math.max(1, pxToPt(glyph.fontSizePx, metrics.widthPx, metrics.widthPt));
+            const widthPt = Math.max(0.1, pxToPt(glyph.widthPx, metrics.widthPx, metrics.widthPt));
+            const naturalWidthPt = Math.max(0.1, encoded.count * fontSize);
+            const horizontalScale = clampNumber((widthPt / naturalWidthPt) * 100, 5, 1000, 100);
+            commands.push(`/Span << /ActualText <${utf16BeHex(glyph.text)}> >> BDC`, 'BT', `/F${font.id} ${pdfNumber(fontSize)} Tf`, `${pdfNumber(horizontalScale)} Tz`, `1 0 0 1 ${pdfNumber(x)} ${pdfNumber(y)} Tm`, `<${encoded.hex}> Tj`, 'ET', 'EMC');
         }
         commands.push('Q');
     }
+    commands.push('q', `${pdfNumber(metrics.widthPt)} 0 0 ${pdfNumber(metrics.heightPt)} 0 0 cm`, `/Im${pageIndex + 1} Do`, 'Q');
     void imageObjectId;
     return commands.join('\n');
 }
-function createFonts(pdf, chars) {
-    const unique = Array.from(new Set(chars.filter((char) => char.length > 0)));
-    const subsets = [];
-    for (let i = 0; i < unique.length; i += 255) {
-        const chunk = unique.slice(i, i + 255);
-        const id = subsets.length + 1;
-        const subset = createFontSubset(pdf, id, chunk);
-        subsets.push(subset);
-    }
-    if (!subsets.length)
-        subsets.push(createFontSubset(pdf, 1, [' ']));
-    return subsets;
+function encodePdfGlyphText(text, font) {
+    const chars = segmentText(text);
+    if (!chars.length)
+        return undefined;
+    const hex = chars
+        .map((char) => {
+        const code = font.charToCode.get(char) ?? font.charToCode.get(' ');
+        return code ? code.toString(16).padStart(4, '0').toUpperCase() : '';
+    })
+        .join('');
+    return hex ? { hex, count: chars.length } : undefined;
 }
-function createFontSubset(pdf, id, chars) {
+function createUnicodeTextFont(pdf, chars) {
+    const unique = Array.from(new Set(chars.filter((char) => char.length > 0)));
+    if (!unique.includes(' '))
+        unique.unshift(' ');
+    if (unique.length > 65534) {
+        throw new Error(`PDF text layer contains too many unique graphemes: ${unique.length}`);
+    }
     const charToCode = new Map();
-    const charProcEntries = [];
-    const encodingNames = [];
-    const widths = [];
-    chars.forEach((char, index) => {
-        const code = index + 1;
-        charToCode.set(char, code);
-        const glyphName = `g${code}`;
-        const procId = pdf.add(pdf.stream('', '1000 0 d0'));
-        charProcEntries.push(`/${glyphName} ${procId} 0 R`);
-        encodingNames.push(`/${glyphName}`);
-        widths.push('1000');
-    });
-    const toUnicodeId = pdf.add(pdf.stream('', createToUnicodeCMap(chars)));
+    unique.forEach((char, index) => charToCode.set(char, index + 1));
+    const fontBytes = getTextLayerFontBytes();
+    const fontFileObjectId = pdf.add(pdf.stream(`/Length1 ${fontBytes.length}`, fontBytes));
+    const cidToGidMapObjectId = pdf.add(pdf.stream('', createCidToGidMap(unique.length)));
+    const descriptorObjectId = pdf.add([
+        '<< /Type /FontDescriptor',
+        '/FontName /HtmlToPdfProSelectableText',
+        '/Flags 4',
+        '/FontBBox [0 -250 1000 1000]',
+        '/ItalicAngle 0',
+        '/Ascent 880',
+        '/Descent -220',
+        '/CapHeight 700',
+        '/StemV 80',
+        `/FontFile2 ${fontFileObjectId} 0 R`,
+        '>>'
+    ].join('\n'));
+    const widths = unique.map(() => '1000').join(' ');
+    const cidFontObjectId = pdf.add([
+        '<< /Type /Font /Subtype /CIDFontType2',
+        '/BaseFont /HtmlToPdfProSelectableText',
+        '/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>',
+        `/FontDescriptor ${descriptorObjectId} 0 R`,
+        '/DW 1000',
+        `/W [1 [${widths}]]`,
+        `/CIDToGIDMap ${cidToGidMapObjectId} 0 R`,
+        '>>'
+    ].join('\n'));
+    const toUnicodeId = pdf.add(pdf.stream('', createToUnicodeCMap(unique)));
     const fontObjectId = pdf.add([
-        '<< /Type /Font /Subtype /Type3',
-        `/Name /F${id}`,
-        '/FontBBox [0 -200 1000 1000]',
-        '/FontMatrix [0.001 0 0 0.001 0 0]',
-        `/CharProcs << ${charProcEntries.join(' ')} >>`,
-        `/Encoding << /Type /Encoding /Differences [1 ${encodingNames.join(' ')}] >>`,
-        `/FirstChar 1 /LastChar ${chars.length}`,
-        `/Widths [${widths.join(' ')}]`,
-        '/Resources << >>',
+        '<< /Type /Font /Subtype /Type0',
+        '/BaseFont /HtmlToPdfProSelectableText',
+        '/Encoding /Identity-H',
+        `/DescendantFonts [${cidFontObjectId} 0 R]`,
         `/ToUnicode ${toUnicodeId} 0 R`,
         '>>'
     ].join('\n'));
-    return { id, fontObjectId, charToCode };
+    return { id: 1, fontObjectId, charToCode };
 }
 function createToUnicodeCMap(chars) {
     const lines = [
@@ -1700,7 +1761,7 @@ function createToUnicodeCMap(chars) {
         '/CMapName /HtmlToPdfProUnicode def',
         '/CMapType 2 def',
         '1 begincodespacerange',
-        '<01> <FF>',
+        '<0001> <FFFF>',
         'endcodespacerange'
     ];
     for (let i = 0; i < chars.length; i += 100) {
@@ -1708,15 +1769,12 @@ function createToUnicodeCMap(chars) {
         lines.push(`${slice.length} beginbfchar`);
         slice.forEach((char, offset) => {
             const code = i + offset + 1;
-            lines.push(`<${code.toString(16).padStart(2, '0').toUpperCase()}> <${utf16BeHexWithoutBom(char)}>`);
+            lines.push(`<${code.toString(16).padStart(4, '0').toUpperCase()}> <${utf16BeHexWithoutBom(char)}>`);
         });
         lines.push('endbfchar');
     }
     lines.push('endcmap', 'CMapName currentdict /CMap defineresource pop', 'end', 'end');
     return lines.join('\n');
-}
-function findFontSubset(fonts, char) {
-    return fonts.find((font) => font.charToCode.has(char));
 }
 function toArrayBuffer(bytes) {
     const buffer = new ArrayBuffer(bytes.byteLength);

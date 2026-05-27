@@ -26,7 +26,7 @@ HTMLElement / HTML string / Markdown
   -> 自研分页算法
   -> DOM Canvas Painter 生成视觉层，逐元素绘制背景、圆角、阴影、边框、文本、表格与常见替换元素
   -> Range.getClientRects 计算文字坐标
-  -> 自研 PDF Writer 写入 image XObject、透明文字层、链接、书签
+  -> 自研 PDF Writer 写入 image XObject、可选文字层、链接、书签
   -> Blob 自动下载
 ```
 
@@ -186,7 +186,7 @@ const html = await exporter.serialize('#report');
 | `inlineCssResources` | `boolean` | `false` | 尝试内联 style 中的 `url(...)` |
 | `materializePseudoElements` | `boolean` | `true` | 物化伪元素文本 |
 | `sanitize` | `boolean` | `true` | 移除脚本和事件属性 |
-| `textLayer` | `boolean` | `true` | 生成透明文字层 |
+| `textLayer` | `boolean` | `true` | 生成可选文字层 |
 | `linkAnnotations` | `boolean` | `true` | 生成链接标注 |
 | `bookmarks` | `boolean` | `true` | 由标题生成 PDF 书签 |
 | `header` | `string \| object` | - | 页眉文本，支持 `{page}` / `{pages}` |
@@ -237,7 +237,7 @@ const exporter = new HtmlToPdfPro({
 });
 ```
 
-页眉页脚会同时进入视觉层和透明文字层。
+页眉页脚会同时进入视觉层和可选文字层。
 
 ## 10. 对 IronPress README 能力的前端映射
 
@@ -344,5 +344,5 @@ export function Report() {
 3. **超大文档**：`dpi` 越高越清晰，也越占内存。长合同、长报表建议先用 180~192 DPI。
 4. **图表库**：ECharts、Chart.js、SVG 图表、Canvas 图表建议在动画完成后再调用导出。
 5. **伪元素**：普通文本型 `::before` / `::after` 会物化；复杂背景图/计数器建议直接写入 DOM 或用额外 CSS 控制。
-6. **文本复制顺序**：透明文字层按 DOM 文本和坐标提取。极复杂多栏布局建议单独做回归样例。
+6. **文本复制顺序**：可选文字层按 DOM 文本和坐标提取。极复杂多栏布局建议单独做回归样例。
 7. **PDF 可编辑性**：该方案目标是高保真归档与复制搜索，不是把每个 CSS box 转成可编辑 PDF 矢量对象。

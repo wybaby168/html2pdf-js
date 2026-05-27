@@ -1,6 +1,6 @@
 {
   "name": "@flyfish-dev/html2pdf-js",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "TypeScript frontend component for high-fidelity HTML to PDF export.",
   "type": "module",
   "main": "./dist/index.js",
@@ -38,11 +38,11 @@
   "homepage": "https://htmltopdfpro.vercel.app",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wybaby168/HtmlToPdfPro.git",
+    "url": "git+https://github.com/wybaby168/html2pdf-js.git",
     "directory": "packages/html2pdf-js"
   },
   "bugs": {
-    "url": "https://github.com/wybaby168/HtmlToPdfPro/issues"
+    "url": "https://github.com/wybaby168/html2pdf-js/issues"
   },
   "license": "AGPL-3.0-only",
   "publishConfig": {

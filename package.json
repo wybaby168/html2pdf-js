@@ -1,13 +1,13 @@
 {
   "name": "htmltopdfpro-demo",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "type": "module",
   "description": "Professional high-fidelity HTML to PDF solution, implemented as a pure TypeScript frontend component.",
   "homepage": "https://htmltopdfpro.vercel.app",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wybaby168/HtmlToPdfPro.git"
+    "url": "git+https://github.com/wybaby168/html2pdf-js.git"
   },
   "keywords": [
     "html-to-pdf",

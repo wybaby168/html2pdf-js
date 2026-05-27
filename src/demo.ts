@@ -1,5 +1,5 @@
 import './demo.css';
-import { HtmlToPdfPro, type HtmlToPdfProgressEvent } from './components';
+import { HtmlToPdfPro, type HtmlToPdfProgressEvent } from '@flyfish-dev/html2pdf-js';
 
 const rows = [
   ['业务目标梳理', '咨询', '16h', '￥4,800', '已完成'],

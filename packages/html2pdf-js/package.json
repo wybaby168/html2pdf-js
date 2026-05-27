@@ -1,0 +1,56 @@
+{
+  "name": "@flyfish-dev/html2pdf-js",
+  "version": "2.0.0",
+  "description": "TypeScript frontend component for high-fidelity HTML to PDF export.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./vendor/paged.polyfill.js": "./vendor/paged.polyfill.js"
+  },
+  "files": [
+    "dist",
+    "vendor",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run clean && pnpm run build"
+  },
+  "keywords": [
+    "html-to-pdf",
+    "pdf",
+    "typescript",
+    "html2canvas",
+    "jspdf",
+    "pagedjs",
+    "frontend",
+    "browser"
+  ],
+  "homepage": "https://htmltopdfpro.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wybaby168/HtmlToPdfPro.git",
+    "directory": "packages/html2pdf-js"
+  },
+  "bugs": {
+    "url": "https://github.com/wybaby168/HtmlToPdfPro/issues"
+  },
+  "license": "AGPL-3.0-only",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "html2canvas": "1.4.1",
+    "jspdf": "4.2.1"
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "name": "html-to-pdf-pro-typescript-demo",
+  "name": "htmltopdfpro-demo",
   "version": "2.0.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
   "homepage": "https://htmltopdfpro.vercel.app",
   "repository": {
     "type": "git",
-    "url": "https://github.com/wybaby168/HtmlToPdfPro.git"
+    "url": "git+https://github.com/wybaby168/HtmlToPdfPro.git"
   },
   "keywords": [
     "html-to-pdf",
@@ -20,15 +20,15 @@
   ],
   "packageManager": "pnpm@10.7.0",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "tsc --noEmit && vite build",
+    "dev": "pnpm --filter @flyfish-dev/html2pdf-js build && vite --host 0.0.0.0",
+    "build": "pnpm --filter @flyfish-dev/html2pdf-js build && tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm --filter @flyfish-dev/html2pdf-js build && tsc --noEmit",
+    "pack:package": "pnpm --dir packages/html2pdf-js pack",
+    "publish:package": "cd packages/html2pdf-js && npm publish --access public --registry=https://registry.npmjs.org/"
   },
   "dependencies": {
-    "html2canvas": "1.4.1",
-    "jspdf": "4.2.1",
-    "pagedjs": "0.4.3"
+    "@flyfish-dev/html2pdf-js": "workspace:*"
   },
   "devDependencies": {
     "javascript-obfuscator": "^5.4.3",

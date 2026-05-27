@@ -321,7 +321,7 @@ function collectDocumentStyles(): string {
 function basePagedCss(options: ResolvedHtmlToPdfProOptions): string {
   const page = options.page;
   return [
-    '<style data-html-to-pdf-pro="base">',
+    '<style data-html2pdf-js="base">',
     `@page { size: ${page.widthMm}mm ${page.heightMm}mm; margin: ${options.margin}; }`,
     'html, body { margin: 0; padding: 0; background: #fff; }',
     'body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
@@ -467,15 +467,15 @@ export class HtmlToPdfPro {
         '<script>window.PagedConfig = { auto: false };<\/script>',
         basePagedCss(opt),
         collectDocumentStyles(),
-        opt.extraCss ? `<style data-html-to-pdf-pro="extra">${opt.extraCss}</style>` : '',
+        opt.extraCss ? `<style data-html2pdf-js="extra">${opt.extraCss}</style>` : '',
         '</head>',
-        '<body><main id="html-to-pdf-pro-root"></main></body>',
+        '<body><main id="html2pdf-js-root"></main></body>',
         '</html>'
       ].join('\n')
     );
     doc.close();
 
-    doc.getElementById('html-to-pdf-pro-root')?.appendChild(doc.importNode(clone, true));
+    doc.getElementById('html2pdf-js-root')?.appendChild(doc.importNode(clone, true));
 
     this.emit(opt, 'assets', { message: 'Wait for CSS, fonts and images' });
     await waitForStylesheets(doc, Math.min(5000, opt.timeoutMs));

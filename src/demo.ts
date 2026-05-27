@@ -145,7 +145,7 @@ const pdfExporter = new HtmlToPdfPro({
     position: 'center'
   },
   extraCss: [
-    '.toolbar, .screen-hint { display: none !important; }',
+    '.toolbar { display: none !important; }',
     '.report { margin: 0 !important; box-shadow: none !important; }',
     'a { color: #1d4ed8; text-decoration: underline; }'
   ].join('\n'),

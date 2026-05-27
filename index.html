@@ -8,10 +8,10 @@
 </head>
 <body>
   <div class="toolbar">
-    <button id="export-pdf" type="button">生成高保真可复制 PDF</button>
-    <button id="inspect-html" class="secondary" type="button">导出 HTML 快照</button>
+    <button id="export-pdf" type="button">生成 PDF</button>
+    <button id="inspect-html" class="secondary" type="button">导出快照</button>
     <div class="status-wrap">
-      <div id="status">准备就绪，可生成不弹打印框、文字可复制的高保真 PDF。</div>
+      <div id="status">准备就绪</div>
       <div class="progress-shell"><div id="progress" class="progress-bar"></div></div>
     </div>
   </div>
@@ -24,17 +24,10 @@
     </div>
   </div>
 
-  <p class="screen-hint">
-    以下为项目交付报告示例。当前方案不引用 IronPress，不使用 html2canvas，不打开打印框；视觉层基于浏览器真实布局与自研 Canvas Painter 输出，PDF 文字层由组件自行计算并叠加。
-  </p>
-
   <article id="report" class="report">
     <header class="hero avoid-break">
       <p class="kicker">Project Delivery Report</p>
       <h1>数字化交付项目报告</h1>
-      <p class="hero-summary">
-        面向客户沟通、内部审批与归档留存的复杂业务页面，保留渐变、圆角、阴影、表格、链接、分页与可复制文字。
-      </p>
       <div class="hero-meta">
         <div><span>客户</span><strong>Acme Group</strong></div>
         <div><span>周期</span><strong>2026 Q2</strong></div>
@@ -43,16 +36,6 @@
     </header>
 
     <div class="report-inner">
-      <section class="avoid-break">
-        <h2>项目摘要</h2>
-        <p>
-          本报告用于验证 HtmlToPdfPro 的高保真 HTML 输出能力：浏览器完成真实布局测量，组件自行分页、渲染视觉层、计算文字坐标，并组装 PDF。
-        </p>
-        <p class="quote">
-          当前实现主链路已经脱离 html2canvas / jsPDF / Paged.js / IronPress：页面视觉由组件读取 DOM 布局和 computed style 后进入自研 Canvas Painter 导出管线，PDF 中写入可选文字层，支持复制、搜索与链接点击。
-        </p>
-      </section>
-
       <section>
         <h2>关键指标</h2>
         <div class="grid-3">
@@ -84,7 +67,6 @@
 
       <section class="pdf-page-break">
         <h2>费用明细</h2>
-        <p>以下费用按阶段汇总，便于会议确认与后续归档。</p>
         <div class="table-wrap">
           <table>
             <thead>
@@ -110,9 +92,6 @@
           <div class="check"><strong>付款节点</strong>确认下一阶段付款安排与开票信息。</div>
           <div class="check"><strong>验收排期</strong>确认最终验收会议时间与参会人员。</div>
         </div>
-        <p class="footer-note">
-          本报告数据为示例内容，可按实际客户、项目阶段与审批流程替换。
-        </p>
       </section>
     </div>
   </article>

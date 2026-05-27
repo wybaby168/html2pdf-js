@@ -26,7 +26,7 @@ HTMLElement / HTML string / Markdown
   -> 自研分页算法
   -> DOM Canvas Painter 生成视觉层，逐元素绘制背景、圆角、阴影、边框、文本、表格与常见替换元素
   -> Range.getClientRects 计算文字坐标
-  -> 自研 PDF Writer 写入 image XObject、可选文字层、链接、书签
+  -> 自研 PDF Writer 先写 image XObject，再写 0 透明度的顶层可选文字层、链接、书签
   -> Blob 自动下载
 ```
 
@@ -186,7 +186,7 @@ const html = await exporter.serialize('#report');
 | `inlineCssResources` | `boolean` | `false` | 尝试内联 style 中的 `url(...)` |
 | `materializePseudoElements` | `boolean` | `true` | 物化伪元素文本 |
 | `sanitize` | `boolean` | `true` | 移除脚本和事件属性 |
-| `textLayer` | `boolean` | `true` | 生成可选文字层 |
+| `textLayer` | `boolean` | `true` | 生成顶层透明可选文字层，支持框选、复制、搜索 |
 | `linkAnnotations` | `boolean` | `true` | 生成链接标注 |
 | `bookmarks` | `boolean` | `true` | 由标题生成 PDF 书签 |
 | `header` | `string \| object` | - | 页眉文本，支持 `{page}` / `{pages}` |
@@ -237,7 +237,7 @@ const exporter = new HtmlToPdfPro({
 });
 ```
 
-页眉页脚会同时进入视觉层和可选文字层。
+页眉页脚会同时进入视觉层和顶层透明可选文字层。
 
 ## 10. 对 IronPress README 能力的前端映射
 
@@ -248,7 +248,7 @@ const exporter = new HtmlToPdfPro({
 | HTML 常用元素 | 使用浏览器 DOM 布局，组件读取 computed style 后自绘语义元素、表格、列表、表单、图片与 Canvas |
 | CSS 选择器与布局 | 复用浏览器真实 CSS 结果，覆盖 Flex、Grid、定位、变换、渐变、阴影、圆角、自定义属性等浏览器能力 |
 | Markdown | 内置轻量 Markdown 到 HTML 转换，再走 HTML 导出管线 |
-| 字体 | 视觉层保留浏览器字体效果；文字层通过 ToUnicode 保证复制/搜索；可通过 `fontFaces` 注入字体声明 |
+| 字体 | 视觉层保留浏览器字体效果；文字层通过 Type0/CIDFont、ToUnicode、ActualText 和 0 透明度 ExtGState 保证复制/搜索；可通过 `fontFaces` 注入视觉字体声明 |
 | 图片 | 支持 img 与 Canvas 内联；视觉层由自研 Canvas Painter 输出后写入 PDF image XObject |
 | 链接 | 根据 `<a href>` 的 DOM 矩形生成 PDF Link Annotation |
 | 书签目录 | 根据 `h1`~`h6` 或 `data-pdf-bookmark` 生成 PDF Outlines |
@@ -340,9 +340,9 @@ export function Report() {
 ## 14. 生产注意事项
 
 1. **跨域资源**：图片、CSS、字体最好使用同域或开启 CORS，否则资源无法内联时可能影响视觉层。
-2. **中文字体**：视觉层会按浏览器显示结果输出；文字层使用 Unicode 映射保证复制/搜索，不依赖系统中文字体嵌入。
+2. **中文字体**：视觉层会按浏览器显示结果输出；文字层使用 Unicode 映射与嵌入式透明选择字体保证复制/搜索，不依赖系统中文字体嵌入。
 3. **超大文档**：`dpi` 越高越清晰，也越占内存。长合同、长报表建议先用 180~192 DPI。
 4. **图表库**：ECharts、Chart.js、SVG 图表、Canvas 图表建议在动画完成后再调用导出。
 5. **伪元素**：普通文本型 `::before` / `::after` 会物化；复杂背景图/计数器建议直接写入 DOM 或用额外 CSS 控制。
-6. **文本复制顺序**：可选文字层按 DOM 文本和坐标提取。极复杂多栏布局建议单独做回归样例。
+6. **文本复制顺序**：可选文字层按 DOM 文本和坐标提取，并写在视觉图片层之后，避免图片层遮挡选择命中。极复杂多栏布局建议单独做回归样例。
 7. **PDF 可编辑性**：该方案目标是高保真归档与复制搜索，不是把每个 CSS box 转成可编辑 PDF 矢量对象。

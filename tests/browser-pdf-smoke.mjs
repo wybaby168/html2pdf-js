@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -56,14 +56,17 @@ async function getJson(url) {
 function assertSelectablePdfStructure(pdfBytes, label) {
   const text = pdfBytes.toString('latin1');
   if (text.includes('/Subtype /Type3')) throw new Error(`${label}: Type3 fonts are not allowed for the selectable text layer.`);
-  if (/\b3\s+Tr\b/.test(text)) throw new Error(`${label}: invisible text rendering mode 3 Tr is not allowed.`);
+  if (/\b3\s+Tr\b/.test(text)) throw new Error(`${label}: text rendering mode 3 Tr is not used because several readers show an I-beam but cannot drag-select it reliably.`);
+  if (!text.includes('/ExtGState') || !text.includes('/GSText') || !/\/ca\s+0\b/.test(text)) {
+    throw new Error(`${label}: selectable overlay must use the zero-alpha ExtGState /GSText.`);
+  }
   for (const marker of ['/Subtype /Type0', '/Subtype /CIDFontType2', '/FontFile2', '/ToUnicode', '/ActualText']) {
     if (!text.includes(marker)) throw new Error(`${label}: missing PDF selectable text marker ${marker}.`);
   }
   const firstText = text.indexOf('/ActualText');
   const firstImage = text.indexOf('/Im1 Do');
-  if (firstText < 0 || firstImage < 0 || firstText > firstImage) {
-    throw new Error(`${label}: selectable text must be written before the visual image layer.`);
+  if (firstText < 0 || firstImage < 0 || firstText < firstImage) {
+    throw new Error(`${label}: selectable text must be written after the visual image layer so viewer hit-testing reaches the text overlay.`);
   }
 }
 
@@ -207,6 +210,14 @@ async function main() {
   if (!bbox.includes('Selectable Text Smoke Test')) {
     throw new Error(`Missing selectable bounding boxes for browser smoke text. BBox output:
 ${bbox.slice(0, 1000)}`);
+  }
+  const htmlPrefix = path.join(outputDir, 'browser-smoke-pdftohtml');
+  await rm(`${htmlPrefix}.xml`, { force: true });
+  runRequired('pdftohtml', ['-xml', '-f', '1', '-l', '1', pdfPath, htmlPrefix]);
+  const htmlXml = await readFile(`${htmlPrefix}.xml`, 'utf8');
+  if (!htmlXml.includes('<text') || !htmlXml.includes('Selectable Text Smoke Test') || !htmlXml.includes('opacity="0.000000"')) {
+    throw new Error(`pdftohtml did not expose a transparent selectable text overlay. XML output:
+${htmlXml.slice(0, 1200)}`);
   }
   await writeFile(txtPath, extracted);
   const normalized = extracted.replace(/\s+/g, ' ').trim();

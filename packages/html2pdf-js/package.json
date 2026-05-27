@@ -1,6 +1,6 @@
 {
   "name": "@flyfish-dev/html2pdf-js",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "description": "Self-contained TypeScript HTML to PDF engine with high-fidelity visual rendering and selectable text layer.",
   "type": "module",
   "main": "./dist/index.js",

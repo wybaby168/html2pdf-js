@@ -1613,7 +1613,7 @@ class PdfBuilder {
         return output;
     }
 }
-const TEXT_LAYER_FONT_BASE64 = 'AAEAAAAKAIAAAwAgT1MvMkVkReAAAAEoAAAAYGNtYXAADABzAAABkAAAADRnbHlmAAAAAAAAAcwAAAABaGVhZCuO3DoAAACsAAAANmhoZWEDcgMOAAAA5AAAACRobXR4A+gAAAAAAYgAAAAGbG9jYQAAAAAAAAHEAAAABm1heHAAAwACAAABCAAAACBuYW1l92sHpgAAAdAAAAG5cG9zdG1/dc8AAAOMAAAALAABAAAAAQAA6wtUQ18PPPUAAwPoAAAAAOY8Ta0AAAAA5jxNrQAAAAAAAAAAAAAAAwACAAAAAAAAAAEAAANw/yQAAAPoAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAEAAAACAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAwPoAZAABQAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAPz8/PwAAACAAIANw/yQAAANwANwAAAAAAAAAAAAAAAAAAAAgAAAD6AAAAAAAAAAAAAIAAAADAAAAFAADAAEAAAAUAAQAIAAAAAQABAABAAAAIP//AAAAIP///+EAAQAAAAAAAAAAAAAAAAAAAAAAAAAMAJYAAQAAAAAAAQAVAAAAAQAAAAAAAgAHABUAAQAAAAAAAwAdABwAAQAAAAAABAAdADkAAQAAAAAABQALAFYAAQAAAAAABgAdABwAAwABBAkAAQAqAGEAAwABBAkAAgAOAIsAAwABBAkAAwA6AJkAAwABBAkABAA6ANMAAwABBAkABQAWAQ0AAwABBAkABgA6AJlIdG1sVG9QZGZQcm9UZXh0TGF5ZXJSZWd1bGFySHRtbFRvUGRmUHJvVGV4dExheWVyLVJlZ3VsYXJIdG1sVG9QZGZQcm9UZXh0TGF5ZXIgUmVndWxhclZlcnNpb24gMS4wAEgAdABtAGwAVABvAFAAZABmAFAAcgBvAFQAZQB4AHQATABhAHkAZQByAFIAZQBnAHUAbABhAHIASAB0AG0AbABUAG8AUABkAGYAUAByAG8AVABlAHgAdABMAGEAeQBlAHIALQBSAGUAZwB1AGwAYQByAEgAdABtAGwAVABvAFAAZABmAFAAcgBvAFQAZQB4AHQATABhAHkAZQByACAAUgBlAGcAdQBsAGEAcgBWAGUAcgBzAGkAbwBuACAAMQAuADAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAABAgVnbHlwaA==';
+const TEXT_LAYER_FONT_BASE64 = 'AAEAAAAKAIAAAwAgT1MvMmV+a9gAAAEoAAAAYGNtYXBLMdr8AAABkAAAADxnbHlmESI83AAAAdQAAAAYaGVhZC93AzQAAACsAAAANmhoZWEHWgMOAAAA5AAAACRobXR4A+gAAAAAAYgAAAAGbG9jYQAMAAAAAAHMAAAABm1heHAABAAGAAABCAAAACBuYW1lJMH+CAAAAewAAAIicG9zdG1/dc8AAAQQAAAALAABAAAAAQAAh96dkV8PPPUAAwPoAAAAAOY8XzYAAAAA5jxfNgAAAAAD6APoAAAAAwACAAAAAAAAAAEAAANw/yQAAAPoAAAAAAPoAAEAAAAAAAAAAAAAAAAAAAABAAEAAAACAAQAAQAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAwPoAZAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAgAAAAAAAAAAAAPz8/PwAAACAloANw/yQAAAPoAPoAAAAAAAAAAAAAAAAAAAAgAAAD6AAAAAAAAAAAAAIAAAADAAAAFAADAAEAAAAUAAQAKAAAAAYABAABAAIAICWg//8AAAAgJaD////h2mEAAQAAAAAAAAAAAAAADAAAAAEAAAAAA+gD6AADAAAxIREhA+j8GAPoAAAADACWAAEAAAAAAAEAFQAAAAEAAAAAAAIABwAVAAEAAAAAAAMAIwAcAAEAAAAAAAQAHQA/AAEAAAAAAAUACwBcAAEAAAAAAAYAHQBnAAMAAQQJAAEAKgCEAAMAAQQJAAIADgCuAAMAAQQJAAMARgC8AAMAAQQJAAQAOgECAAMAAQQJAAUAFgE8AAMAAQQJAAYAOgFSSHRtbFRvUGRmUHJvVGV4dExheWVyUmVndWxhckh0bWxUb1BkZlByb1RleHRMYXllci1SZWd1bGFyLTQuMC4zSHRtbFRvUGRmUHJvVGV4dExheWVyIFJlZ3VsYXJWZXJzaW9uIDEuMUh0bWxUb1BkZlByb1RleHRMYXllci1SZWd1bGFyAEgAdABtAGwAVABvAFAAZABmAFAAcgBvAFQAZQB4AHQATABhAHkAZQByAFIAZQBnAHUAbABhAHIASAB0AG0AbABUAG8AUABkAGYAUAByAG8AVABlAHgAdABMAGEAeQBlAHIALQBSAGUAZwB1AGwAYQByAC0ANAAuADAALgAzAEgAdABtAGwAVABvAFAAZABmAFAAcgBvAFQAZQB4AHQATABhAHkAZQByACAAUgBlAGcAdQBsAGEAcgBWAGUAcgBzAGkAbwBuACAAMQAuADEASAB0AG0AbABUAG8AUABkAGYAUAByAG8AVABlAHgAdABMAGEAeQBlAHIALQBSAGUAZwB1AGwAYQByAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAABAgVnbHlwaA==';
 let cachedTextLayerFontBytes;
 function getTextLayerFontBytes() {
     if (cachedTextLayerFontBytes)
@@ -1648,7 +1648,7 @@ function buildPdf(pages, bookmarks, metrics, options) {
             '<< /Type /Page',
             `/Parent ${pagesObjectId} 0 R`,
             `/MediaBox [0 0 ${pdfNumber(metrics.widthPt)} ${pdfNumber(metrics.heightPt)}]`,
-            `/Resources << /XObject << /Im${index + 1} ${imageObjectId} 0 R >> /Font << /F${textFont.id} ${textFont.fontObjectId} 0 R >> >>`,
+            `/Resources << /XObject << /Im${index + 1} ${imageObjectId} 0 R >> /Font << /F${textFont.id} ${textFont.fontObjectId} 0 R >> /ExtGState << /GSText << /Type /ExtGState /ca 0 /CA 0 >> >> >>`,
             `/Contents ${contentObjectId} 0 R`,
             annots,
             '>>'
@@ -1670,11 +1670,13 @@ function collectPdfTextCharacters(pages) {
 }
 function createContentStream(page, pageIndex, imageObjectId, font, metrics) {
     const commands = [];
-    // Place a normal, selectable Unicode text layer first, then paint the visual JPEG page on top.
-    // This follows the same layering idea as OCR PDFs: the user sees the high-fidelity raster layer,
-    // while PDF viewers can still hit-test, select, search and copy the real text objects underneath.
+    commands.push('q', `${pdfNumber(metrics.widthPt)} 0 0 ${pdfNumber(metrics.heightPt)} 0 0 cm`, `/Im${pageIndex + 1} Do`, 'Q');
+    // Write the text layer *after* the visual image with normal text rendering and zero non-stroking alpha.
+    // This preserves the OCR-PDF interaction pattern while avoiding a common viewer edge case where
+    // text rendering mode 3 exposes an I-beam cursor but does not create a selectable range. The
+    // topmost Type0/CID text is fully transparent, has real glyph outlines, and remains searchable/copyable.
     if (page.glyphs.length) {
-        commands.push('q', '0 0 0 rg');
+        commands.push('q', '/GSText gs', '0 0 0 rg');
         for (const glyph of page.glyphs) {
             const encoded = encodePdfGlyphText(glyph.text, font);
             if (!encoded)
@@ -1685,11 +1687,10 @@ function createContentStream(page, pageIndex, imageObjectId, font, metrics) {
             const widthPt = Math.max(0.1, pxToPt(glyph.widthPx, metrics.widthPx, metrics.widthPt));
             const naturalWidthPt = Math.max(0.1, encoded.count * fontSize);
             const horizontalScale = clampNumber((widthPt / naturalWidthPt) * 100, 5, 1000, 100);
-            commands.push(`/Span << /ActualText <${utf16BeHex(glyph.text)}> >> BDC`, 'BT', `/F${font.id} ${pdfNumber(fontSize)} Tf`, `${pdfNumber(horizontalScale)} Tz`, `1 0 0 1 ${pdfNumber(x)} ${pdfNumber(y)} Tm`, `<${encoded.hex}> Tj`, 'ET', 'EMC');
+            commands.push(`/Span << /ActualText <${utf16BeHex(glyph.text)}> >> BDC`, 'BT', `/F${font.id} ${pdfNumber(fontSize)} Tf`, '0 Tr', `${pdfNumber(horizontalScale)} Tz`, `1 0 0 1 ${pdfNumber(x)} ${pdfNumber(y)} Tm`, `<${encoded.hex}> Tj`, 'ET', 'EMC');
         }
         commands.push('Q');
     }
-    commands.push('q', `${pdfNumber(metrics.widthPt)} 0 0 ${pdfNumber(metrics.heightPt)} 0 0 cm`, `/Im${pageIndex + 1} Do`, 'Q');
     void imageObjectId;
     return commands.join('\n');
 }
@@ -1719,7 +1720,7 @@ function createUnicodeTextFont(pdf, chars) {
     const cidToGidMapObjectId = pdf.add(pdf.stream('', createCidToGidMap(unique.length)));
     const descriptorObjectId = pdf.add([
         '<< /Type /FontDescriptor',
-        '/FontName /HtmlToPdfProSelectableText',
+        '/FontName /HtmlToPdfProTextLayer',
         '/Flags 4',
         '/FontBBox [0 -250 1000 1000]',
         '/ItalicAngle 0',
@@ -1733,7 +1734,7 @@ function createUnicodeTextFont(pdf, chars) {
     const widths = unique.map(() => '1000').join(' ');
     const cidFontObjectId = pdf.add([
         '<< /Type /Font /Subtype /CIDFontType2',
-        '/BaseFont /HtmlToPdfProSelectableText',
+        '/BaseFont /HtmlToPdfProTextLayer',
         '/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>',
         `/FontDescriptor ${descriptorObjectId} 0 R`,
         '/DW 1000',
@@ -1744,7 +1745,7 @@ function createUnicodeTextFont(pdf, chars) {
     const toUnicodeId = pdf.add(pdf.stream('', createToUnicodeCMap(unique)));
     const fontObjectId = pdf.add([
         '<< /Type /Font /Subtype /Type0',
-        '/BaseFont /HtmlToPdfProSelectableText',
+        '/BaseFont /HtmlToPdfProTextLayer',
         '/Encoding /Identity-H',
         `/DescendantFonts [${cidFontObjectId} 0 R]`,
         `/ToUnicode ${toUnicodeId} 0 R`,

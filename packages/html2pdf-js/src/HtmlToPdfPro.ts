@@ -1051,12 +1051,11 @@ export class HtmlToPdfPro {
     stage.className = 'html-to-pdf-pro-stage';
     stage.style.cssText = [
       'position:fixed',
-      'inset:0',
+      'left:-100000px',
+      'top:0',
       'width:0',
       'height:0',
-      'overflow:hidden',
-      'visibility:hidden',
-      'opacity:0',
+      'overflow:visible',
       'pointer-events:none',
       'z-index:-1',
       'contain:layout style paint'

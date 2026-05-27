@@ -1,5 +1,4 @@
-import './demo.css';
-import { HtmlToPdfPro } from '@flyfish-dev/html2pdf-js';
+import { HtmlToPdfPro } from '../pkg/index.js';
 const rows = [
     ['业务目标梳理', '咨询', '16h', '￥4,800', '已完成'],
     ['视觉方案设计', '设计', '24h', '￥7,200', '已完成'],

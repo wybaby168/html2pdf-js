@@ -1,6 +1,6 @@
 {
   "name": "htmltopdfpro-demo",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "private": true,
   "type": "module",
   "description": "Self-contained TypeScript HTML to PDF engine with high-fidelity visual rendering and selectable text layer.",
@@ -27,7 +27,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "pnpm --filter @flyfish-dev/html2pdf-js build && tsc --noEmit",
     "pack:package": "pnpm --dir packages/html2pdf-js pack",
-    "publish:package": "cd packages/html2pdf-js && npm publish --access public --registry=https://registry.npmjs.org/"
+    "publish:package": "cd packages/html2pdf-js && npm publish --access public --registry=https://registry.npmjs.org/",
+    "test:pdf": "tsc -p packages/html2pdf-js/tsconfig.json && node tests/browser-pdf-smoke.mjs && node tests/full-demo-pdf-smoke.mjs"
   },
   "dependencies": {
     "@flyfish-dev/html2pdf-js": "workspace:*"

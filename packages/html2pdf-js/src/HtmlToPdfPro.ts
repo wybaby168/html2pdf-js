@@ -261,8 +261,6 @@ const DEFAULT_OPTIONS: ResolvedHtmlToPdfProOptions = {
   onProgress: () => undefined
 };
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
-const XHTML_NS = 'http://www.w3.org/1999/xhtml';
 
 function isElement(value: unknown): value is HTMLElement {
   return value instanceof HTMLElement;
@@ -973,7 +971,7 @@ export class HtmlToPdfPro {
 
   async outputBlob(source: HtmlToPdfSource, overrideOptions: HtmlToPdfProOptions = {}): Promise<Blob> {
     const bytes = await this.toPdf(source, overrideOptions);
-    return new Blob([bytes], { type: 'application/pdf' });
+    return new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' });
   }
 
   async download(source: HtmlToPdfSource, overrideOptions: HtmlToPdfProOptions = {}): Promise<void> {
@@ -1198,20 +1196,26 @@ async function renderPageVisual(
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.ceil(metrics.widthPx * outputScale));
   canvas.height = Math.max(1, Math.ceil(metrics.heightPx * outputScale));
-  const context = canvas.getContext('2d');
+  const context = canvas.getContext('2d', { alpha: options.backgroundColor === null });
   if (!context) throw new Error('Canvas 2D context is not available.');
+
+  context.save();
+  context.scale(outputScale, outputScale);
   if (options.backgroundColor) {
     context.fillStyle = options.backgroundColor;
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillRect(0, 0, metrics.widthPx, metrics.heightPx);
   }
 
-  const svgUrl = createPageSvgUrl(layout, page, totalPages, options);
-  try {
-    const image = await withTimeout(loadImage(svgUrl), options.timeoutMs, 'Page SVG render');
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  } finally {
-    URL.revokeObjectURL(svgUrl);
-  }
+  const rootRect = layout.root.getBoundingClientRect();
+  context.save();
+  context.beginPath();
+  context.rect(metrics.margin.left, metrics.margin.top, metrics.contentWidthPx, metrics.contentHeightPx);
+  context.clip();
+  await paintElementTree(context, layout.root, layout, page, rootRect, options);
+  context.restore();
+
+  paintHeaderFooterCanvas(context, layout, page.index + 1, totalPages, options);
+  context.restore();
 
   const mime = 'image/jpeg';
   return {
@@ -1221,125 +1225,523 @@ async function renderPageVisual(
   };
 }
 
-function createPageSvgUrl(
+async function paintElementTree(
+  context: CanvasRenderingContext2D,
+  node: Node,
   layout: LayoutContext,
   page: PageSlice,
-  totalPages: number,
+  rootRect: DOMRect,
   options: ResolvedHtmlToPdfProOptions
-): string {
-  const doc = document.implementation.createHTMLDocument('');
-  const pageEl = doc.createElement('div');
-  pageEl.setAttribute('xmlns', XHTML_NS);
-  pageEl.className = 'html-to-pdf-pro-page';
-  pageEl.setAttribute(
-    'style',
-    [
-      `width:${layout.metrics.widthPx}px`,
-      `height:${layout.metrics.heightPx}px`,
-      `background:${options.backgroundColor ?? 'transparent'}`,
-      'position:relative',
-      'overflow:hidden',
-      'margin:0',
-      'padding:0'
-    ].join(';')
-  );
+): Promise<void> {
+  if (!(node instanceof Element)) return;
+  if (node !== layout.root && !isElementVisible(node)) return;
 
-  const style = doc.createElement('style');
-  style.textContent = layout.sourceCss;
-  pageEl.append(style);
+  const style = node instanceof HTMLElement || node instanceof SVGElement ? window.getComputedStyle(node) : undefined;
+  const opacity = style ? clampNumber(style.opacity, 0, 1, 1) : 1;
 
-  const viewport = doc.createElement('div');
-  viewport.setAttribute(
-    'style',
-    [
-      'position:absolute',
-      `left:${layout.metrics.margin.left + layout.xOffsetPx}px`,
-      `top:${layout.metrics.margin.top}px`,
-      `width:${layout.metrics.contentWidthPx - layout.xOffsetPx * 2}px`,
-      `height:${layout.metrics.contentHeightPx}px`,
-      'overflow:hidden',
-      'margin:0',
-      'padding:0'
-    ].join(';')
-  );
+  context.save();
+  context.globalAlpha *= opacity;
 
-  const content = doc.createElement('div');
-  content.setAttribute(
-    'style',
-    [
-      'position:absolute',
-      'left:0',
-      `top:${-page.startY * layout.zoom}px`,
-      `width:${layout.layoutWidthPx}px`,
-      `transform:scale(${layout.zoom})`,
-      'transform-origin:0 0',
-      'margin:0',
-      'padding:0'
-    ].join(';')
-  );
+  if (node !== layout.root && style) {
+    paintElementBox(context, node, style, layout, page, rootRect);
+    await paintReplacedElement(context, node, layout, page, rootRect);
+    paintFormControl(context, node, style, layout, page, rootRect);
+  }
 
-  content.append(doc.importNode(layout.root.cloneNode(true), true));
-  viewport.append(content);
-  pageEl.append(viewport);
-  appendHeaderFooter(pageEl, layout, page.index + 1, totalPages, options);
+  for (const child of Array.from(node.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      paintTextNode(context, child as Text, layout, page, rootRect);
+    } else {
+      await paintElementTree(context, child, layout, page, rootRect, options);
+    }
+  }
 
-  const serialized = new XMLSerializer().serializeToString(pageEl);
-  const svg = [
-    `<svg xmlns="${SVG_NS}" width="${layout.metrics.widthPx}" height="${layout.metrics.heightPx}" viewBox="0 0 ${layout.metrics.widthPx} ${layout.metrics.heightPx}">`,
-    `<foreignObject x="0" y="0" width="100%" height="100%">`,
-    serialized,
-    '</foreignObject>',
-    '</svg>'
-  ].join('');
-
-  return URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+  context.restore();
 }
 
-function appendHeaderFooter(
-  pageEl: HTMLElement,
+function isElementVisible(node: Element): boolean {
+  const style = window.getComputedStyle(node);
+  if (style.display === 'none' || style.visibility === 'hidden') return false;
+  if (Number.parseFloat(style.opacity || '1') <= 0) return false;
+  return true;
+}
+
+function paintElementBox(
+  context: CanvasRenderingContext2D,
+  element: Element,
+  style: CSSStyleDeclaration,
+  layout: LayoutContext,
+  page: PageSlice,
+  rootRect: DOMRect
+): void {
+  const rects = Array.from(element.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+  if (!rects.length) return;
+
+  for (const domRect of rects) {
+    const rect = toPageRect(domRect, layout, page, rootRect);
+    if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+    const radius = parseBorderRadius(style, rect.width, rect.height);
+    paintBoxShadow(context, rect, radius, style.boxShadow);
+    paintBackground(context, rect, radius, style);
+    paintBorders(context, rect, radius, style);
+  }
+}
+
+async function paintReplacedElement(
+  context: CanvasRenderingContext2D,
+  element: Element,
+  layout: LayoutContext,
+  page: PageSlice,
+  rootRect: DOMRect
+): Promise<void> {
+  const rect = firstPageRect(element, layout, page, rootRect);
+  if (!rect || rect.width <= 0 || rect.height <= 0) return;
+
+  try {
+    if (element instanceof HTMLImageElement) {
+      const src = element.currentSrc || element.src;
+      if (!src) return;
+      const image = element.complete && element.naturalWidth > 0 ? element : await withTimeout(loadImage(src), 5000, 'Image render');
+      context.drawImage(image, rect.x, rect.y, rect.width, rect.height);
+      return;
+    }
+
+    if (element instanceof HTMLCanvasElement) {
+      context.drawImage(element, rect.x, rect.y, rect.width, rect.height);
+      return;
+    }
+  } catch {
+    // Cross-origin or tainted replaced content should not fail the whole PDF.
+  }
+}
+
+function paintFormControl(
+  context: CanvasRenderingContext2D,
+  element: Element,
+  style: CSSStyleDeclaration,
+  layout: LayoutContext,
+  page: PageSlice,
+  rootRect: DOMRect
+): void {
+  if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)) return;
+  const rect = firstPageRect(element, layout, page, rootRect);
+  if (!rect) return;
+  const value = element instanceof HTMLSelectElement
+    ? element.selectedOptions[0]?.textContent ?? element.value
+    : element.value;
+  if (!value) return;
+
+  context.save();
+  context.font = canvasFontFromStyle(style);
+  context.fillStyle = safeCanvasColor(style.color, '#111827');
+  context.textBaseline = 'alphabetic';
+  const paddingLeft = parseCssLengthToPx(style.paddingLeft || '0');
+  const fontSize = Math.max(1, parseCssLengthToPx(style.fontSize || '12px'));
+  const x = rect.x + paddingLeft;
+  const y = rect.y + rect.height / 2 + fontSize * 0.35;
+  context.fillText(value, x, y, Math.max(1, rect.width - paddingLeft * 2));
+  context.restore();
+}
+
+function paintTextNode(
+  context: CanvasRenderingContext2D,
+  node: Text,
+  layout: LayoutContext,
+  page: PageSlice,
+  rootRect: DOMRect
+): void {
+  const parent = node.parentElement;
+  if (!parent || !node.nodeValue || !node.nodeValue.trim()) return;
+  if (!isElementVisible(parent)) return;
+  const style = window.getComputedStyle(parent);
+  if (style.color === 'transparent' || style.fontSize === '0px') return;
+
+  const range = document.createRange();
+  const segments = segmentText(node.nodeValue);
+  let offset = 0;
+
+  context.save();
+  context.font = canvasFontFromStyle(style);
+  context.fillStyle = safeCanvasColor(style.color, '#111827');
+  context.textBaseline = 'alphabetic';
+
+  for (const segment of segments) {
+    const start = offset;
+    const end = offset + segment.length;
+    offset = end;
+    if (!segment.trim()) continue;
+
+    try {
+      range.setStart(node, start);
+      range.setEnd(node, end);
+    } catch {
+      continue;
+    }
+
+    const rect = Array.from(range.getClientRects()).find((item) => item.width > 0 || item.height > 0);
+    if (!rect) continue;
+    const pageRect = toPageRect(rect, layout, page, rootRect);
+    if (!pageRect) continue;
+
+    const fontSize = Math.max(1, parseCssLengthToPx(style.fontSize || '12px') * layout.zoom);
+    const baseline = pageRect.y + pageRect.height * 0.78;
+    context.fillText(segment, pageRect.x, baseline);
+    paintTextDecoration(context, style, pageRect, baseline, fontSize, segment);
+  }
+
+  range.detach();
+  context.restore();
+}
+
+function paintTextDecoration(
+  context: CanvasRenderingContext2D,
+  style: CSSStyleDeclaration,
+  rect: PageRect,
+  baseline: number,
+  fontSize: number,
+  text: string
+): void {
+  const line = style.textDecorationLine || '';
+  if (!line.includes('underline')) return;
+  const width = Math.max(rect.width, context.measureText(text).width);
+  context.save();
+  context.strokeStyle = safeCanvasColor(style.textDecorationColor || style.color, String(context.fillStyle));
+  context.lineWidth = Math.max(0.5, fontSize / 16);
+  context.beginPath();
+  context.moveTo(rect.x, baseline + Math.max(1, fontSize * 0.08));
+  context.lineTo(rect.x + width, baseline + Math.max(1, fontSize * 0.08));
+  context.stroke();
+  context.restore();
+}
+
+interface PageRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function firstPageRect(element: Element, layout: LayoutContext, page: PageSlice, rootRect: DOMRect): PageRect | undefined {
+  for (const rect of Array.from(element.getClientRects())) {
+    const pageRect = toPageRect(rect, layout, page, rootRect);
+    if (pageRect) return pageRect;
+  }
+  return undefined;
+}
+
+function toPageRect(rect: DOMRect, layout: LayoutContext, page: PageSlice, rootRect: DOMRect): PageRect | undefined {
+  const topInSource = rect.top - rootRect.top;
+  const bottomInSource = rect.bottom - rootRect.top;
+  if (bottomInSource < page.startY || topInSource > page.endY) return undefined;
+
+  return {
+    x: layout.metrics.margin.left + layout.xOffsetPx + (rect.left - rootRect.left) * layout.zoom,
+    y: layout.metrics.margin.top + (topInSource - page.startY) * layout.zoom,
+    width: rect.width * layout.zoom,
+    height: rect.height * layout.zoom
+  };
+}
+
+interface BorderRadiusPx {
+  topLeft: number;
+  topRight: number;
+  bottomRight: number;
+  bottomLeft: number;
+}
+
+function parseBorderRadius(style: CSSStyleDeclaration, width: number, height: number): BorderRadiusPx {
+  const maxRadius = Math.max(0, Math.min(width, height) / 2);
+  return {
+    topLeft: Math.min(maxRadius, parseCssLengthToPx(style.borderTopLeftRadius || '0')),
+    topRight: Math.min(maxRadius, parseCssLengthToPx(style.borderTopRightRadius || '0')),
+    bottomRight: Math.min(maxRadius, parseCssLengthToPx(style.borderBottomRightRadius || '0')),
+    bottomLeft: Math.min(maxRadius, parseCssLengthToPx(style.borderBottomLeftRadius || '0'))
+  };
+}
+
+function roundedRectPath(context: CanvasRenderingContext2D, rect: PageRect, radius: BorderRadiusPx): void {
+  const x = rect.x;
+  const y = rect.y;
+  const w = rect.width;
+  const h = rect.height;
+  const tl = Math.min(radius.topLeft, w / 2, h / 2);
+  const tr = Math.min(radius.topRight, w / 2, h / 2);
+  const br = Math.min(radius.bottomRight, w / 2, h / 2);
+  const bl = Math.min(radius.bottomLeft, w / 2, h / 2);
+
+  context.beginPath();
+  context.moveTo(x + tl, y);
+  context.lineTo(x + w - tr, y);
+  context.quadraticCurveTo(x + w, y, x + w, y + tr);
+  context.lineTo(x + w, y + h - br);
+  context.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+  context.lineTo(x + bl, y + h);
+  context.quadraticCurveTo(x, y + h, x, y + h - bl);
+  context.lineTo(x, y + tl);
+  context.quadraticCurveTo(x, y, x + tl, y);
+  context.closePath();
+}
+
+function paintBackground(
+  context: CanvasRenderingContext2D,
+  rect: PageRect,
+  radius: BorderRadiusPx,
+  style: CSSStyleDeclaration
+): void {
+  const color = safeCanvasColor(style.backgroundColor, 'transparent');
+  const image = style.backgroundImage || 'none';
+  const hasColor = color !== 'transparent' && !/rgba?\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/i.test(color);
+  const gradient = image.includes('linear-gradient') ? createLinearGradientPaint(context, rect, image) : undefined;
+  if (!hasColor && !gradient) return;
+
+  context.save();
+  roundedRectPath(context, rect, radius);
+  context.fillStyle = gradient ?? color;
+  context.fill();
+  context.restore();
+}
+
+function paintBorders(
+  context: CanvasRenderingContext2D,
+  rect: PageRect,
+  radius: BorderRadiusPx,
+  style: CSSStyleDeclaration
+): void {
+  const top = borderSide(style.borderTopWidth, style.borderTopStyle, style.borderTopColor);
+  const right = borderSide(style.borderRightWidth, style.borderRightStyle, style.borderRightColor);
+  const bottom = borderSide(style.borderBottomWidth, style.borderBottomStyle, style.borderBottomColor);
+  const left = borderSide(style.borderLeftWidth, style.borderLeftStyle, style.borderLeftColor);
+
+  const sides = [top, right, bottom, left].filter((side) => side.width > 0);
+  if (!sides.length) return;
+
+  const same = sides.length === 4 && top.width === right.width && top.width === bottom.width && top.width === left.width && top.color === right.color && top.color === bottom.color && top.color === left.color;
+  if (same) {
+    context.save();
+    roundedRectPath(context, rect, radius);
+    context.strokeStyle = top.color;
+    context.lineWidth = top.width;
+    context.stroke();
+    context.restore();
+    return;
+  }
+
+  context.save();
+  context.lineCap = 'butt';
+  if (top.width) drawLine(context, rect.x, rect.y + top.width / 2, rect.x + rect.width, rect.y + top.width / 2, top);
+  if (right.width) drawLine(context, rect.x + rect.width - right.width / 2, rect.y, rect.x + rect.width - right.width / 2, rect.y + rect.height, right);
+  if (bottom.width) drawLine(context, rect.x, rect.y + rect.height - bottom.width / 2, rect.x + rect.width, rect.y + rect.height - bottom.width / 2, bottom);
+  if (left.width) drawLine(context, rect.x + left.width / 2, rect.y, rect.x + left.width / 2, rect.y + rect.height, left);
+  context.restore();
+}
+
+interface BorderSidePaint {
+  width: number;
+  color: string;
+}
+
+function borderSide(width: string, style: string, color: string): BorderSidePaint {
+  const hidden = !style || style === 'none' || style === 'hidden';
+  return {
+    width: hidden ? 0 : Math.max(0, parseCssLengthToPx(width || '0')),
+    color: safeCanvasColor(color, '#000000')
+  };
+}
+
+function drawLine(
+  context: CanvasRenderingContext2D,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  side: BorderSidePaint
+): void {
+  context.strokeStyle = side.color;
+  context.lineWidth = side.width;
+  context.beginPath();
+  context.moveTo(x1, y1);
+  context.lineTo(x2, y2);
+  context.stroke();
+}
+
+function paintBoxShadow(
+  context: CanvasRenderingContext2D,
+  rect: PageRect,
+  radius: BorderRadiusPx,
+  rawShadow: string
+): void {
+  if (!rawShadow || rawShadow === 'none') return;
+  const shadows = splitCssTopLevelCommas(rawShadow).map(parseBoxShadow).filter((shadow): shadow is BoxShadowPaint => Boolean(shadow));
+  for (const shadow of shadows) {
+    if (shadow.inset) continue;
+    const spreadRect = {
+      x: rect.x - shadow.spread,
+      y: rect.y - shadow.spread,
+      width: rect.width + shadow.spread * 2,
+      height: rect.height + shadow.spread * 2
+    };
+    context.save();
+    context.shadowColor = shadow.color;
+    context.shadowBlur = shadow.blur;
+    context.shadowOffsetX = shadow.offsetX;
+    context.shadowOffsetY = shadow.offsetY;
+    context.fillStyle = shadow.color;
+    roundedRectPath(context, spreadRect, radius);
+    context.fill();
+    context.restore();
+  }
+}
+
+interface BoxShadowPaint {
+  inset: boolean;
+  offsetX: number;
+  offsetY: number;
+  blur: number;
+  spread: number;
+  color: string;
+}
+
+function parseBoxShadow(value: string): BoxShadowPaint | undefined {
+  const inset = /\binset\b/i.test(value);
+  const colorMatch = value.match(/rgba?\([^)]*\)|hsla?\([^)]*\)|#[0-9a-f]{3,8}\b|\b[a-z]+\b/i);
+  const color = colorMatch ? safeCanvasColor(colorMatch[0], 'rgba(0,0,0,.25)') : 'rgba(0,0,0,.25)';
+  const withoutColor = colorMatch ? value.replace(colorMatch[0], '') : value;
+  const numbers = withoutColor.match(/-?\d*\.?\d+(?:px)?/gi)?.map(parseCssLengthToPx) ?? [];
+  if (numbers.length < 2) return undefined;
+  return {
+    inset,
+    offsetX: numbers[0] ?? 0,
+    offsetY: numbers[1] ?? 0,
+    blur: Math.max(0, numbers[2] ?? 0),
+    spread: numbers[3] ?? 0,
+    color
+  };
+}
+
+function createLinearGradientPaint(context: CanvasRenderingContext2D, rect: PageRect, image: string): CanvasGradient | undefined {
+  const match = /linear-gradient\((.*)\)/i.exec(image);
+  if (!match) return undefined;
+  const parts = splitCssTopLevelCommas(match[1]);
+  if (parts.length < 2) return undefined;
+
+  let angle = 180;
+  let stopStart = 0;
+  const first = parts[0].trim();
+  if (/deg\b/i.test(first)) {
+    angle = Number.parseFloat(first);
+    stopStart = 1;
+  } else if (/to\s+right/i.test(first)) {
+    angle = 90;
+    stopStart = 1;
+  } else if (/to\s+left/i.test(first)) {
+    angle = 270;
+    stopStart = 1;
+  } else if (/to\s+bottom/i.test(first)) {
+    angle = 180;
+    stopStart = 1;
+  } else if (/to\s+top/i.test(first)) {
+    angle = 0;
+    stopStart = 1;
+  }
+
+  const radians = ((angle - 90) * Math.PI) / 180;
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
+  const half = Math.sqrt(rect.width * rect.width + rect.height * rect.height) / 2;
+  const x1 = cx - Math.cos(radians) * half;
+  const y1 = cy - Math.sin(radians) * half;
+  const x2 = cx + Math.cos(radians) * half;
+  const y2 = cy + Math.sin(radians) * half;
+  const gradient = context.createLinearGradient(x1, y1, x2, y2);
+  const stops = parts.slice(stopStart);
+
+  stops.forEach((stop, index) => {
+    const parsed = parseGradientStop(stop, stops.length, index);
+    gradient.addColorStop(parsed.offset, parsed.color);
+  });
+  return gradient;
+}
+
+function parseGradientStop(stop: string, total: number, index: number): { color: string; offset: number } {
+  const colorMatch = stop.match(/rgba?\([^)]*\)|hsla?\([^)]*\)|#[0-9a-f]{3,8}\b|\b[a-z]+\b/i);
+  const color = colorMatch ? safeCanvasColor(colorMatch[0], '#000000') : '#000000';
+  const afterColor = colorMatch ? stop.slice((colorMatch.index ?? 0) + colorMatch[0].length) : '';
+  const pctMatch = afterColor.match(/(-?\d*\.?\d+)%/);
+  const offset = pctMatch ? Number.parseFloat(pctMatch[1]) / 100 : total <= 1 ? 0 : index / (total - 1);
+  return { color, offset: Math.min(1, Math.max(0, offset)) };
+}
+
+function splitCssTopLevelCommas(value: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const char of value) {
+    if (char === '(') depth += 1;
+    if (char === ')') depth = Math.max(0, depth - 1);
+    if (char === ',' && depth === 0) {
+      parts.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+}
+
+function safeCanvasColor(value: string, fallback: string): string {
+  const color = value.trim();
+  if (!color) return fallback;
+  return color;
+}
+
+function canvasFontFromStyle(style: CSSStyleDeclaration): string {
+  const fontStyle = style.fontStyle && style.fontStyle !== 'normal' ? style.fontStyle : '';
+  const fontVariant = style.fontVariant && style.fontVariant !== 'normal' ? style.fontVariant : '';
+  const fontWeight = style.fontWeight || '400';
+  const fontSize = style.fontSize || '12px';
+  const fontFamily = style.fontFamily || 'sans-serif';
+  return [fontStyle, fontVariant, fontWeight, fontSize, fontFamily].filter(Boolean).join(' ');
+}
+
+function paintHeaderFooterCanvas(
+  context: CanvasRenderingContext2D,
   layout: LayoutContext,
   pageNumber: number,
   totalPages: number,
   options: ResolvedHtmlToPdfProOptions
 ): void {
-  if (options.header) appendHeaderFooterLine(pageEl, layout, options.header, pageNumber, totalPages, 'header');
-  if (options.footer) appendHeaderFooterLine(pageEl, layout, options.footer, pageNumber, totalPages, 'footer');
+  if (options.header) paintHeaderFooterLineCanvas(context, layout, options.header, pageNumber, totalPages, 'header');
+  if (options.footer) paintHeaderFooterLineCanvas(context, layout, options.footer, pageNumber, totalPages, 'footer');
 }
 
-function appendHeaderFooterLine(
-  pageEl: HTMLElement,
+function paintHeaderFooterLineCanvas(
+  context: CanvasRenderingContext2D,
   layout: LayoutContext,
   config: HtmlToPdfHeaderFooter,
   pageNumber: number,
   totalPages: number,
   slot: 'header' | 'footer'
 ): void {
-  const doc = pageEl.ownerDocument;
   const text = formatPageText(config.text, pageNumber, totalPages);
   const fontSize = config.fontSizePx ?? 10;
   const offset = config.offsetPx ?? 0;
-  const div = doc.createElement('div');
-  const horizontal = config.position === 'left' ? `left:${layout.metrics.margin.left}px;text-align:left` : config.position === 'right' ? `right:${layout.metrics.margin.right}px;text-align:right` : `left:${layout.metrics.margin.left}px;right:${layout.metrics.margin.right}px;text-align:center`;
-  const vertical = slot === 'header'
-    ? `top:${Math.max(4, layout.metrics.margin.top / 2 - fontSize / 2 + offset)}px`
-    : `bottom:${Math.max(4, layout.metrics.margin.bottom / 2 - fontSize / 2 + offset)}px`;
-  div.textContent = text;
-  div.setAttribute(
-    'style',
-    [
-      'position:absolute',
-      horizontal,
-      vertical,
-      `font-size:${fontSize}px`,
-      `line-height:${fontSize * 1.25}px`,
-      `color:${config.color ?? '#4b5563'}`,
-      'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-      'white-space:nowrap',
-      'overflow:hidden',
-      'text-overflow:ellipsis'
-    ].join(';')
-  );
-  pageEl.append(div);
+  const y = slot === 'header'
+    ? Math.max(4, layout.metrics.margin.top / 2 + fontSize / 2 + offset)
+    : layout.metrics.heightPx - Math.max(4, layout.metrics.margin.bottom / 2 - fontSize / 2 - offset);
+
+  context.save();
+  context.font = `${fontSize}px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;
+  context.fillStyle = config.color ?? '#4b5563';
+  context.textBaseline = 'alphabetic';
+  context.textAlign = config.position ?? 'center';
+  const x = config.position === 'left'
+    ? layout.metrics.margin.left
+    : config.position === 'right'
+      ? layout.metrics.widthPx - layout.metrics.margin.right
+      : layout.metrics.widthPx / 2;
+  context.fillText(text, x, y, layout.metrics.widthPx - layout.metrics.margin.left - layout.metrics.margin.right);
+  context.restore();
 }
 
 function formatPageText(text: string, pageNumber: number, totalPages: number): string {
@@ -1361,37 +1763,37 @@ function extractPageText(
     if (!parent) continue;
     const computed = window.getComputedStyle(parent);
     const fontSize = Math.max(1, parseCssLengthToPx(computed.fontSize || '12px') * layout.zoom);
-    const segments = segmentText(node.nodeValue ?? '');
-    let offset = 0;
-    let lastX = 0;
-    let lastY = 0;
+    const tokens = tokenizeTextForExtraction(node.nodeValue ?? '', computed.whiteSpace);
+    const lines = new Map<number, Array<{ text: string; xPx: number; yPx: number; order: number }>>();
 
-    for (const segment of segments) {
-      const start = offset;
-      const end = offset + segment.length;
-      offset = end;
+    for (const token of tokens) {
       try {
-        range.setStart(node, start);
-        range.setEnd(node, end);
+        range.setStart(node, token.start);
+        range.setEnd(node, token.end);
       } catch {
         continue;
       }
-      const rect = Array.from(range.getClientRects()).find((r) => r.width > 0 || r.height > 0);
-      if (!rect) {
-        if (isRenderableWhitespace(segment) && glyphs.length) {
-          glyphs.push({ text: segment, pageIndex: page.index, xPx: lastX, yPx: lastY, fontSizePx: fontSize });
-        }
-        continue;
-      }
+
+      const rect = Array.from(range.getClientRects()).find((item) => item.width > 0 || item.height > 0);
+      if (!rect) continue;
 
       const topInSource = rect.top - rootRect.top;
       if (topInSource < page.startY - 1 || topInSource > page.endY + 1) continue;
+
       const xPx = layout.metrics.margin.left + layout.xOffsetPx + (rect.left - rootRect.left) * layout.zoom;
       const yTop = layout.metrics.margin.top + (topInSource - page.startY) * layout.zoom;
       const yPx = yTop + rect.height * layout.zoom * 0.78;
-      lastX = xPx + rect.width * layout.zoom;
-      lastY = yPx;
-      glyphs.push({ text: segment, pageIndex: page.index, xPx, yPx, fontSizePx: fontSize });
+      const lineKey = Math.round(yPx * 2) / 2;
+      const line = lines.get(lineKey) ?? [];
+      line.push({ text: token.text, xPx, yPx, order: line.length });
+      lines.set(lineKey, line);
+    }
+
+    for (const line of Array.from(lines.values()).sort((a, b) => (a[0]?.yPx ?? 0) - (b[0]?.yPx ?? 0))) {
+      const sorted = line.sort((a, b) => a.xPx - b.xPx || a.order - b.order);
+      for (const chunk of chunkExtractionLine(sorted)) {
+        glyphs.push({ text: chunk.text, pageIndex: page.index, xPx: chunk.xPx, yPx: chunk.yPx, fontSizePx: fontSize });
+      }
     }
   }
 
@@ -1400,6 +1802,69 @@ function extractPageText(
   return glyphs;
 }
 
+function chunkExtractionLine(tokens: Array<{ text: string; xPx: number; yPx: number }>): Array<{ text: string; xPx: number; yPx: number }> {
+  const chunks: Array<{ text: string; xPx: number; yPx: number }> = [];
+  let current = '';
+  let xPx = tokens[0]?.xPx ?? 0;
+  let yPx = tokens[0]?.yPx ?? 0;
+  const max = 60;
+
+  const flush = () => {
+    const text = current.trimEnd();
+    if (text) chunks.push({ text, xPx, yPx });
+    current = '';
+  };
+
+  for (const token of tokens) {
+    const pieces = splitExtractionToken(token.text);
+    for (const piece of pieces) {
+      if (!current) {
+        xPx = token.xPx;
+        yPx = token.yPx;
+      }
+      if (current && current.length + piece.length > max) flush();
+      if (!current) {
+        xPx = token.xPx;
+        yPx = token.yPx;
+      }
+      current += piece;
+    }
+  }
+  flush();
+  return chunks;
+}
+
+function splitExtractionToken(value: string): string[] {
+  const max = 60;
+  if (value.length <= max) return [value];
+  const chunks: string[] = [];
+  for (let index = 0; index < value.length; index += max) {
+    chunks.push(value.slice(index, index + max));
+  }
+  return chunks;
+}
+
+interface ExtractionToken {
+  start: number;
+  end: number;
+  text: string;
+}
+
+function tokenizeTextForExtraction(value: string, whiteSpace: string): ExtractionToken[] {
+  const preserve = /pre|break-spaces/i.test(whiteSpace);
+  const tokens: ExtractionToken[] = [];
+  const regex = /\S+\s*/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(value))) {
+    const raw = match[0];
+    const text = preserve ? raw : raw.replace(/\s+/g, ' ');
+    if (!text) continue;
+    tokens.push({ start: match.index, end: match.index + raw.length, text });
+  }
+
+  return tokens;
+}
 function appendHeaderFooterGlyphs(
   glyphs: TextGlyph[],
   layout: LayoutContext,
@@ -1428,11 +1893,7 @@ function appendLineGlyphs(
   const y = slot === 'header'
     ? Math.max(4, layout.metrics.margin.top / 2 + size / 2)
     : layout.metrics.heightPx - Math.max(4, layout.metrics.margin.bottom / 2 - size / 2);
-  let currentX = x;
-  for (const char of segmentText(text)) {
-    glyphs.push({ text: char, pageIndex: pageNumber - 1, xPx: currentX, yPx: y, fontSizePx: size });
-    currentX += size * 0.52;
-  }
+  glyphs.push({ text, pageIndex: pageNumber - 1, xPx: x, yPx: y, fontSizePx: size });
 }
 
 function extractPageLinks(layout: LayoutContext, page: PageSlice): LinkAnnotation[] {
@@ -1716,6 +2177,12 @@ function createToUnicodeCMap(chars: string[]): string {
 
 function findFontSubset(fonts: FontSubset[], char: string): FontSubset | undefined {
   return fonts.find((font) => font.charToCode.has(char));
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
 }
 
 function createLinkAnnotation(link: LinkAnnotation, metrics: PageMetrics): string {

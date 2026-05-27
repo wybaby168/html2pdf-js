@@ -56,7 +56,7 @@ The default engine is `dom-canvas-text`:
 2. Collect CSS and inline assets where possible.
 3. Measure layout with the browser's native engine.
 4. Compute page slices with built-in pagination rules.
-5. Render each page visually via SVG `foreignObject` + Canvas, without html2canvas.
+5. Render each page visually with the built-in DOM Canvas Painter, without html2canvas or SVG foreignObject screenshots.
 6. Extract text boxes with `Range.getClientRects()`.
 7. Write the PDF directly with image XObjects, invisible Unicode text layer, link annotations, and bookmarks.
 

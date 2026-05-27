@@ -24,7 +24,7 @@ HTMLElement / HTML string / Markdown
   -> 可选物化 ::before / ::after 文本
   -> 浏览器真实布局测量
   -> 自研分页算法
-  -> SVG foreignObject + Canvas 生成视觉层
+  -> DOM Canvas Painter 生成视觉层，逐元素绘制背景、圆角、阴影、边框、文本、表格与常见替换元素
   -> Range.getClientRects 计算文字坐标
   -> 自研 PDF Writer 写入 image XObject、透明文字层、链接、书签
   -> Blob 自动下载
@@ -245,11 +245,11 @@ const exporter = new HtmlToPdfPro({
 
 | 能力方向 | HtmlToPdfPro 当前实现 |
 |---|---|
-| HTML 常用元素 | 使用浏览器 DOM 渲染，支持浏览器可渲染的语义元素、表格、列表、表单、图片、SVG、Canvas |
+| HTML 常用元素 | 使用浏览器 DOM 布局，组件读取 computed style 后自绘语义元素、表格、列表、表单、图片与 Canvas |
 | CSS 选择器与布局 | 复用浏览器真实 CSS 结果，覆盖 Flex、Grid、定位、变换、渐变、阴影、圆角、自定义属性等浏览器能力 |
 | Markdown | 内置轻量 Markdown 到 HTML 转换，再走 HTML 导出管线 |
 | 字体 | 视觉层保留浏览器字体效果；文字层通过 ToUnicode 保证复制/搜索；可通过 `fontFaces` 注入字体声明 |
-| 图片 | 支持 img、SVG image、Canvas 内联；视觉层写入 PDF image XObject |
+| 图片 | 支持 img 与 Canvas 内联；视觉层由自研 Canvas Painter 输出后写入 PDF image XObject |
 | 链接 | 根据 `<a href>` 的 DOM 矩形生成 PDF Link Annotation |
 | 书签目录 | 根据 `h1`~`h6` 或 `data-pdf-bookmark` 生成 PDF Outlines |
 | 安全清洗 | 默认移除 `script`、`iframe`、`object`、`embed`、事件属性和 `javascript:` URL |

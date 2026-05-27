@@ -16,7 +16,7 @@
   </div>
 
   <p class="screen-hint">
-    以下为项目交付报告示例。当前方案不引用 IronPress，不使用 html2canvas，不打开打印框；视觉层基于浏览器真实 DOM 渲染输出，PDF 文字层由组件自行计算并叠加。
+    以下为项目交付报告示例。当前方案不引用 IronPress，不使用 html2canvas，不打开打印框；视觉层基于浏览器真实布局与自研 Canvas Painter 输出，PDF 文字层由组件自行计算并叠加。
   </p>
 
   <article id="report" class="report">
@@ -40,7 +40,7 @@
           本报告用于验证 HtmlToPdfPro 的高保真 HTML 输出能力：浏览器完成真实布局测量，组件自行分页、渲染视觉层、计算文字坐标，并组装 PDF。
         </p>
         <p class="quote">
-          当前实现主链路已经脱离 html2canvas / jsPDF / Paged.js / IronPress：页面视觉以 DOM 快照进入自研导出管线，PDF 中叠加透明文字层，支持复制、搜索与链接点击。
+          当前实现主链路已经脱离 html2canvas / jsPDF / Paged.js / IronPress：页面视觉由组件读取 DOM 布局和 computed style 后进入自研 Canvas Painter 导出管线，PDF 中叠加透明文字层，支持复制、搜索与链接点击。
         </p>
       </section>
 

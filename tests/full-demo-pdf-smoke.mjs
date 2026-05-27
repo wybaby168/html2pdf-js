@@ -1,0 +1,29 @@
+import { spawn, spawnSync } from 'node:child_process';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
+const chromeBin=process.env.CHROME_BIN || '/usr/bin/chromium';
+const port=9899; const chrome=spawn(chromeBin,['--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage',`--remote-debugging-port=${port}`,'about:blank'],{stdio:['ignore','ignore','pipe']}); let stderr=''; chrome.stderr.on('data',d=>stderr+=d);
+async function getJson(u){const r=await fetch(u); if(!r.ok) throw new Error('HTTP '+r.status); return r.json()}
+function runRequired(command,args){const result=spawnSync(command,args,{encoding:'utf8'}); if(result.error) throw result.error; if(result.status!==0) throw new Error(`${command} ${args.join(' ')} failed:\n${result.stdout}\n${result.stderr}`); return result.stdout}
+try{
+ let targets; for(let i=0;i<80;i++){try{targets=await getJson(`http://127.0.0.1:${port}/json`); if(targets?.length) break}catch{} await delay(250)}
+ const target=targets?.find(t=>t.type==='page'); if(!target) throw new Error('No target '+stderr);
+ const ws=new WebSocket(target.webSocketDebuggerUrl); await new Promise((res,rej)=>{ws.onopen=res; ws.onerror=rej}); let id=0; const pending=new Map(); ws.onmessage=e=>{const m=JSON.parse(e.data); if(m.id&&pending.has(m.id)){pending.get(m.id)(m); pending.delete(m.id)}}; const send=(method,params={})=>new Promise((res,rej)=>{const i=++id; pending.set(i,m=>m.error?rej(new Error(JSON.stringify(m.error))):res(m.result)); ws.send(JSON.stringify({id:i,method,params}))});
+ await send('Runtime.enable'); await send('Page.enable');
+ let lib=await readFile('packages/html2pdf-js/dist/HtmlToPdfPro.js','utf8'); lib=lib.replace('export class HtmlToPdfPro','class HtmlToPdfPro')+'\n;globalThis.HtmlToPdfPro=HtmlToPdfPro;'; await send('Runtime.evaluate',{expression:`(0,eval)(${JSON.stringify(lib)});`,awaitPromise:true,returnByValue:true,timeout:10000});
+ const html=await readFile('index.html','utf8'); const css=await readFile('src/demo.css','utf8');
+ const body=(html.match(/<body>([\s\S]*)<script type="module"/)||[])[1]||'';
+ const expr=`(async()=>{const done=t=>{document.body.innerHTML='<pre id="result"></pre>';document.getElementById('result').textContent=t}; const b64=bytes=>{let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.slice(i,i+8192));return btoa(s)}; document.head.innerHTML='<meta charset="utf-8"><style>'+${JSON.stringify(css)}+'</style>'; document.body.innerHTML=${JSON.stringify(body)}; const rows=[['业务目标梳理','咨询','16h','￥4,800','已完成'],['视觉方案设计','设计','24h','￥7,200','已完成'],['页面内容制作','交付','42h','￥16,800','进行中'],['报告模板整理','交付','18h','￥7,200','进行中'],['客户验收检查','质检','12h','￥3,600','计划中'],['上线准备优化','运营','20h','￥8,000','计划中'],['交接与复盘会议','服务','10h','￥3,000','计划中']]; const tbody=document.querySelector('#line-items'); for(let i=0;i<35;i++){const item=rows[i%rows.length]; const tr=document.createElement('tr'); tr.innerHTML=['<td>'+String(i+1).padStart(2,'0')+'</td>','<td><strong>'+item[0]+'</strong><span>阶段 '+(Math.floor(i/7)+1)+' / 交付批次</span></td>','<td>'+item[1]+'</td>','<td>'+item[2]+'</td>','<td>'+item[3]+'</td>','<td><em class="badge">'+item[4]+'</em></td>'].join(''); tbody.appendChild(tr)}; try{const exporter=new globalThis.HtmlToPdfPro({filename:'full-demo.pdf',page:{format:'a4'},margin:'18mm 14mm 19mm 14mm',dpi:96,imageQuality:.9,backgroundColor:'#fff',fitToPage:true,bleedPx:28,pageBreakMode:'avoid',collectStyles:true,includeExternalStylesheets:false,inlineImages:false,inlineCanvas:false,materializePseudoElements:true,textLayer:true,linkAnnotations:true,bookmarks:true,header:{text:'HtmlToPdfPro / Self-hosted DOM Canvas Text Engine',position:'left'},footer:{text:'Page {page} of {pages}',position:'center'},extraCss:'.toolbar,.screen-hint{display:none!important}.report{margin:0!important;box-shadow:none!important}'}); const bytes=await exporter.toPdf('#report'); done('OK\\nSIZE='+bytes.length+'\\nPDF_BASE64='+b64(bytes)+'\\nEND_PDF_BASE64')}catch(e){done('ERROR\\n'+(e.stack||e))}})()`;
+ await send('Runtime.evaluate',{expression:expr,awaitPromise:false,returnByValue:true,timeout:1000}); let text=''; for(let i=0;i<120;i++){const r=await send('Runtime.evaluate',{expression:"document.getElementById('result')?.textContent||''",returnByValue:true,awaitPromise:true,timeout:5000}); text=r.result.value||''; if(text.startsWith('OK\n')||text.startsWith('ERROR\n')) break; await delay(500)}; if(!text.startsWith('OK\n')) throw new Error('failed '+text+' '+stderr); const m=text.match(/PDF_BASE64=([A-Za-z0-9+/=]+)\nEND_PDF_BASE64/); await mkdir('tests/output',{recursive:true}); await writeFile('tests/output/full-demo.pdf',Buffer.from(m[1],'base64')); console.log(text.slice(0,100)); await send('Browser.close').catch(()=>{}); ws.close();
+} finally { if(!chrome.killed) chrome.kill('SIGKILL') }
+
+const info=runRequired('pdfinfo',['tests/output/full-demo.pdf']);
+if(!/Pages:\s+5\b/.test(info)) throw new Error('Expected full demo PDF to have 5 pages. pdfinfo output:\n'+info);
+const extracted=runRequired('pdftotext',['tests/output/full-demo.pdf','-']);
+await writeFile('tests/output/full-demo.txt',extracted);
+const normalized=extracted.replace(/\s+/g,' ').trim();
+for(const marker of ['数字化交付项目报告','项目摘要','费用明细','HtmlToPdfPro / Self-hosted DOM Canvas Text Engine','Page 1 of 5','Page 5 of 5']){
+  if(!normalized.includes(marker)) throw new Error('Missing full-demo text marker: '+marker+'\nExtracted text:\n'+extracted);
+}
+console.log('Full demo PDF smoke test passed: tests/output/full-demo.pdf');
+console.log(info.trim());

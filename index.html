@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HtmlToPdfPro - 项目交付报告</title>
+</head>
+<body>
+  <div class="toolbar">
+    <button id="export-pdf" type="button">下载 PDF</button>
+    <button id="native-print" class="secondary" type="button">打印 / 保存</button>
+    <div class="status-wrap">
+      <div id="status">准备就绪，可生成项目报告 PDF。</div>
+      <div class="progress-shell"><div id="progress" class="progress-bar"></div></div>
+    </div>
+  </div>
+
+  <p class="screen-hint">
+    以下为项目交付报告示例，内容为演示数据。
+  </p>
+
+  <article id="report" class="report">
+    <header class="hero avoid-break">
+      <p class="kicker">Project Delivery Report</p>
+      <h1>数字化交付项目报告</h1>
+      <p class="hero-summary">
+        面向客户沟通、内部审批与归档留存的项目报告样式，信息清晰、版式稳定、适合直接输出为 PDF。
+      </p>
+      <div class="hero-meta">
+        <div><span>客户</span><strong>Acme Group</strong></div>
+        <div><span>周期</span><strong>2026 Q2</strong></div>
+        <div><span>状态</span><strong>稳步推进</strong></div>
+      </div>
+    </header>
+
+    <div class="report-inner">
+      <section class="avoid-break">
+        <h2>项目摘要</h2>
+        <p>
+          本报告汇总项目目标、交付进度、预算执行与后续安排，供客户会议、内部审批和归档使用。
+        </p>
+        <p class="quote">
+          当前整体进展稳定，核心页面已完成主要设计与内容确认，剩余工作集中在细节校验、验收反馈与上线准备。
+        </p>
+      </section>
+
+      <section>
+        <h2>关键指标</h2>
+        <div class="grid-3">
+          <div class="card"><span class="label">交付进度</span><div class="value">82%</div><small>核心事项按计划推进</small></div>
+          <div class="card"><span class="label">预算执行</span><div class="value">64%</div><small>费用支出保持在预期内</small></div>
+          <div class="card"><span class="label">风险等级</span><div class="value">低</div><small>暂无影响交付的重大风险</small></div>
+        </div>
+      </section>
+
+      <section class="avoid-break">
+        <h2>交付安排</h2>
+        <div class="timeline">
+          <div class="step"><b>1</b><strong>需求确认</strong>完成业务目标、页面范围与资料清单确认。</div>
+          <div class="step"><b>2</b><strong>设计定稿</strong>完成视觉规范、关键页面与内容结构评审。</div>
+          <div class="step"><b>3</b><strong>内容制作</strong>推进报告、表单与运营页面的内容配置。</div>
+          <div class="step"><b>4</b><strong>验收交付</strong>完成检查、反馈处理、确认与上线交接。</div>
+        </div>
+      </section>
+
+      <section class="avoid-break">
+        <h2>执行概览</h2>
+        <div class="chart">
+          <div class="chart-row"><strong>目标达成</strong><div class="chart-track"><div class="chart-bar" style="width: 92%"></div></div><span>92%</span></div>
+          <div class="chart-row"><strong>内容确认</strong><div class="chart-track"><div class="chart-bar" style="width: 88%"></div></div><span>88%</span></div>
+          <div class="chart-row"><strong>质量检查</strong><div class="chart-track"><div class="chart-bar" style="width: 84%"></div></div><span>84%</span></div>
+          <div class="chart-row"><strong>上线准备</strong><div class="chart-track"><div class="chart-bar" style="width: 76%"></div></div><span>76%</span></div>
+        </div>
+      </section>
+
+      <section class="pdf-page-break">
+        <h2>费用明细</h2>
+        <p>以下费用按阶段汇总，便于会议确认与后续归档。</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>交付事项</th>
+                <th>类别</th>
+                <th>工时</th>
+                <th>金额</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody id="line-items"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>待确认事项</h2>
+        <div class="checklist">
+          <div class="check"><strong>范围确认</strong>确认本阶段交付内容与验收口径。</div>
+          <div class="check"><strong>资料提交</strong>补充上线所需品牌、法务与运营资料。</div>
+          <div class="check"><strong>付款节点</strong>确认下一阶段付款安排与开票信息。</div>
+          <div class="check"><strong>验收排期</strong>确认最终验收会议时间与参会人员。</div>
+        </div>
+        <p class="footer-note">
+          本报告数据为示例内容，可按实际客户、项目阶段与审批流程替换。
+        </p>
+      </section>
+    </div>
+  </article>
+
+  <script type="module" src="/src/demo.ts"></script>
+</body>
+</html>

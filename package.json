@@ -1,0 +1,38 @@
+{
+  "name": "html-to-pdf-pro-typescript-demo",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Professional high-fidelity HTML to PDF solution, implemented as a pure TypeScript frontend component.",
+  "homepage": "https://htmltopdfpro.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wybaby168/HtmlToPdfPro.git"
+  },
+  "keywords": [
+    "html-to-pdf",
+    "pdf",
+    "typescript",
+    "vite",
+    "html2canvas",
+    "jspdf",
+    "pagedjs"
+  ],
+  "packageManager": "pnpm@10.7.0",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "html2canvas": "1.4.1",
+    "jspdf": "4.2.1",
+    "pagedjs": "0.4.3"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^5.4.3",
+    "typescript": "^5.8.3",
+    "vite": "^5.4.11"
+  }
+}

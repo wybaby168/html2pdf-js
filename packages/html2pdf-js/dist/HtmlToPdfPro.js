@@ -12,7 +12,7 @@ const DEFAULT_OPTIONS = {
         orientation: 'portrait'
     },
     margin: '18mm 14mm 18mm 14mm',
-    dpi: 180,
+    dpi: 192,
     imageType: 'jpeg',
     imageQuality: 0.94,
     backgroundColor: '#ffffff',
@@ -789,15 +789,16 @@ export class HtmlToPdfPro {
         const stage = document.createElement('div');
         stage.className = 'html-to-pdf-pro-stage';
         stage.style.cssText = [
-            'position:absolute',
-            'left:-100000px',
-            'top:0',
-            `width:${sourceWidth}px`,
-            'min-height:1px',
-            'overflow:visible',
-            'background:transparent',
+            'position:fixed',
+            'inset:0',
+            'width:0',
+            'height:0',
+            'overflow:hidden',
+            'visibility:hidden',
+            'opacity:0',
+            'pointer-events:none',
             'z-index:-1',
-            'pointer-events:none'
+            'contain:layout style paint'
         ].join(';');
         const style = document.createElement('style');
         style.textContent = sourceCss;

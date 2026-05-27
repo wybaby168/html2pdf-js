@@ -162,7 +162,7 @@ const blob = await exporter.outputBlob('#report');
 | `filename` | `document.pdf` | 下载文件名 |
 | `page.format` | `a4` | `a4` / `letter` / `legal`，也可用 `widthMm` / `heightMm` 自定义 |
 | `margin` | `18mm 14mm 18mm 14mm` | 页面边距，支持 CSS 长度单位 |
-| `dpi` | `180` | 视觉层导出分辨率，越高越清晰，也越耗内存 |
+| `dpi` | `192` | 视觉层导出分辨率，默认约 2x；越高越清晰，也越耗内存 |
 | `imageQuality` | `0.94` | JPEG 质量 |
 | `fitToPage` | `true` | 将源页面宽度等比压入 PDF 内容区域 |
 | `bleedPx` | `24` | 页面切片安全边距 |
@@ -210,7 +210,7 @@ npm run test:pdf
 
 - 本方案为了“原样还原”会把视觉层作为页面图像写入 PDF，同时写入可选文字层；文字可复制/搜索，但 PDF 内可编辑矢量文本不是主目标。
 - 跨域图片、字体或 CSS 如果没有 CORS 权限，可能无法内联；可通过 `resourceErrorMode` 控制忽略、警告或抛错。
-- 极长页面或超大图片会消耗浏览器内存，生产环境建议按业务文档拆分导出或降低 `dpi`。
+- 极长页面或超大图片会消耗浏览器内存，生产环境建议按业务文档拆分导出或按需把 `dpi` 调到 192 到 288。
 - 数学公式、图表、代码高亮等只要已经在浏览器 DOM 中渲染完成，就可以作为视觉层输出；文字层会尽量提取 DOM 文本。
 
 ## License

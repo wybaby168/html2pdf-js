@@ -14,18 +14,25 @@ const rows = [
 const tbody = document.querySelector<HTMLTableSectionElement>('#line-items');
 const status = document.querySelector<HTMLDivElement>('#status');
 const progress = document.querySelector<HTMLDivElement>('#progress');
+const exportOverlay = document.querySelector<HTMLDivElement>('#export-overlay');
+const exportOverlayMessage = document.querySelector<HTMLDivElement>('#export-overlay-message');
 const exportButton = document.querySelector<HTMLButtonElement>('#export-pdf');
 const inspectButton = document.querySelector<HTMLButtonElement>('#inspect-html');
 
-if (!tbody || !status || !progress || !exportButton || !inspectButton) {
+if (!tbody || !status || !progress || !exportOverlay || !exportOverlayMessage || !exportButton || !inspectButton) {
   throw new Error('Demo DOM is incomplete. Please check index.html.');
 }
 
 const tbodyEl = tbody;
 const statusEl = status;
 const progressEl = progress;
+const exportOverlayEl = exportOverlay;
+const exportOverlayMessageEl = exportOverlayMessage;
 const exportButtonEl = exportButton;
 const inspectButtonEl = inspectButton;
+const EXPORT_OVERLAY_MIN_MS = 320;
+
+let exportOverlayShownAt = 0;
 
 for (let i = 0; i < 35; i += 1) {
   const item = rows[i % rows.length];
@@ -51,17 +58,63 @@ function lockButtons(locked: boolean): void {
   inspectButtonEl.disabled = locked;
 }
 
-function handleProgress(event: HtmlToPdfProgressEvent): void {
-  if (event.phase === 'clone') setStatus('正在克隆页面 DOM，并保留表单与 Canvas 状态…', 0.06);
-  if (event.phase === 'styles') setStatus('正在收集当前页面 CSS 与字体声明…', 0.14);
-  if (event.phase === 'assets') setStatus('正在内联图片、SVG 与 Canvas 资源…', 0.24);
-  if (event.phase === 'layout') setStatus('正在基于浏览器真实布局计算排版尺寸…', 0.34);
-  if (event.phase === 'paginate') setStatus('正在执行自研分页算法，避开关键内容断裂…', 0.43);
-  if (event.phase === 'render-page') {
-    setStatus(`正在生成第 ${event.page} / ${event.totalPages} 页：视觉层 + 文字层…`, 0.43 + (event.ratio ?? 0) * 0.48);
+function setExporting(exporting: boolean, message = '正在准备页面，请稍候。'): void {
+  document.body.classList.toggle('is-exporting', exporting);
+  exportOverlayEl.hidden = !exporting;
+  exportOverlayMessageEl.textContent = message;
+  if (exporting) exportOverlayShownAt = performance.now();
+}
+
+function setOverlayMessage(text: string): void {
+  if (!exportOverlayEl.hidden) exportOverlayMessageEl.textContent = text;
+}
+
+async function clearExporting(): Promise<void> {
+  const elapsed = performance.now() - exportOverlayShownAt;
+  if (elapsed < EXPORT_OVERLAY_MIN_MS) {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, EXPORT_OVERLAY_MIN_MS - elapsed));
   }
-  if (event.phase === 'pdf') setStatus('正在组装 PDF 对象、链接标注与可复制文字层…', 0.95);
-  if (event.phase === 'save') setStatus(`已完成：${event.filename}`, 1);
+  setExporting(false);
+}
+
+async function flushPaint(): Promise<void> {
+  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+}
+
+function handleProgress(event: HtmlToPdfProgressEvent): void {
+  if (event.phase === 'clone') {
+    setStatus('正在克隆页面 DOM，并保留表单与 Canvas 状态…', 0.06);
+    setOverlayMessage('正在克隆页面 DOM，并保留表单与 Canvas 状态…');
+  }
+  if (event.phase === 'styles') {
+    setStatus('正在收集当前页面 CSS 与字体声明…', 0.14);
+    setOverlayMessage('正在收集当前页面 CSS 与字体声明…');
+  }
+  if (event.phase === 'assets') {
+    setStatus('正在内联图片、SVG 与 Canvas 资源…', 0.24);
+    setOverlayMessage('正在内联图片、SVG 与 Canvas 资源…');
+  }
+  if (event.phase === 'layout') {
+    setStatus('正在基于浏览器真实布局计算排版尺寸…', 0.34);
+    setOverlayMessage('正在基于浏览器真实布局计算排版尺寸…');
+  }
+  if (event.phase === 'paginate') {
+    setStatus('正在执行自研分页算法，避开关键内容断裂…', 0.43);
+    setOverlayMessage('正在执行自研分页算法，避开关键内容断裂…');
+  }
+  if (event.phase === 'render-page') {
+    const text = `正在生成第 ${event.page} / ${event.totalPages} 页：视觉层 + 文字层…`;
+    setStatus(text, 0.43 + (event.ratio ?? 0) * 0.48);
+    setOverlayMessage(text);
+  }
+  if (event.phase === 'pdf') {
+    setStatus('正在组装 PDF 对象、链接标注与可复制文字层…', 0.95);
+    setOverlayMessage('正在组装 PDF 对象、链接标注与可复制文字层…');
+  }
+  if (event.phase === 'save') {
+    setStatus(`已完成：${event.filename}`, 1);
+    setOverlayMessage(`已完成：${event.filename}`);
+  }
 }
 
 const pdfExporter = new HtmlToPdfPro({
@@ -100,8 +153,10 @@ const pdfExporter = new HtmlToPdfPro({
 });
 
 exportButtonEl.addEventListener('click', async () => {
+  setExporting(true, '正在生成高分辨率 PDF…');
   lockButtons(true);
   setStatus('开始生成高保真、可复制文字 PDF…', 0.02);
+  await flushPaint();
 
   try {
     await pdfExporter.download('#report');
@@ -111,12 +166,15 @@ exportButtonEl.addEventListener('click', async () => {
     setStatus(`生成失败：${message}`, 0);
   } finally {
     lockButtons(false);
+    await clearExporting();
   }
 });
 
 inspectButtonEl.addEventListener('click', async () => {
+  setExporting(true, '正在导出独立 HTML 快照…');
   lockButtons(true);
   setStatus('正在导出独立 HTML 快照…', 0.18);
+  await flushPaint();
 
   try {
     const html = await pdfExporter.serialize('#report');
@@ -134,5 +192,6 @@ inspectButtonEl.addEventListener('click', async () => {
     setStatus(`快照导出失败：${message}`, 0);
   } finally {
     lockButtons(false);
+    await clearExporting();
   }
 });

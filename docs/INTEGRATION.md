@@ -171,7 +171,7 @@ const html = await exporter.serialize('#report');
 | `page.heightMm` | `number` | `297` | 自定义页面高度 |
 | `page.orientation` | `portrait` / `landscape` | `portrait` | 页面方向 |
 | `margin` | `string` | `18mm 14mm 18mm 14mm` | 页面边距，支持 `px` / `pt` / `mm` / `cm` / `in` |
-| `dpi` | `number` | `180` | 视觉层分辨率 |
+| `dpi` | `number` | `192` | 视觉层分辨率，默认约 2x |
 | `imageQuality` | `number` | `0.94` | JPEG 质量 |
 | `backgroundColor` | `string \| null` | `#ffffff` | 页面背景 |
 | `fitToPage` | `boolean` | `true` | 保留原布局并等比缩放到内容区域 |
@@ -366,7 +366,7 @@ npm run test:pdf
 
 1. **跨域资源**：图片、CSS、字体最好使用同域或开启 CORS，否则资源无法内联时可能影响视觉层。
 2. **中文字体**：视觉层会按浏览器显示结果输出；文字层使用 Unicode 映射与嵌入式透明选择字体保证复制/搜索，不依赖系统中文字体嵌入。
-3. **超大文档**：`dpi` 越高越清晰，也越占内存。长合同、长报表建议先用 180~192 DPI。
+3. **超大文档**：`dpi` 越高越清晰，也越占内存。长合同、长报表建议先用 192~288 DPI。
 4. **图表库**：ECharts、Chart.js、SVG 图表、Canvas 图表建议在动画完成后再调用导出。
 5. **伪元素**：普通文本型 `::before` / `::after` 会物化；复杂背景图/计数器建议直接写入 DOM 或用额外 CSS 控制。
 6. **文本复制顺序**：可选文字层按 DOM 文本和坐标提取，并写在视觉图片层之后，避免图片层遮挡选择命中。4.0.4 起默认按 grapheme 逐字测量，解决连续中文在自动换行处丢字的问题。极复杂多栏布局建议单独做回归样例。

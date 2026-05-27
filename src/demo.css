@@ -65,6 +65,58 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .progress-shell { height: 6px; margin-top: 6px; overflow: hidden; background: #e5e7eb; border-radius: 999px; }
 .progress-bar { width: 0; height: 100%; background: linear-gradient(90deg, #1d4ed8, #14b8a6); transition: width .2s ease; }
 
+body.is-exporting {
+  overflow: hidden;
+  cursor: progress;
+}
+
+.export-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(6px);
+}
+.export-overlay[hidden] { display: none; }
+.export-overlay-panel {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  min-width: 280px;
+  max-width: min(92vw, 420px);
+  padding: 18px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+.export-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #dbe3f2;
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: export-spin 0.9s linear infinite;
+}
+.export-overlay-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.export-overlay-message {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+
+@keyframes export-spin {
+  to { transform: rotate(360deg); }
+}
+
 .screen-hint {
   max-width: 980px;
   margin: 18px auto 0;

@@ -2,6 +2,7 @@ node_modules/
 dist/
 packages/*/dist/
 *.tgz
+*.bundle
 .vercel/
 .env
 .env.*

@@ -183,6 +183,11 @@ interface TextGlyph {
   fontSizePx: number;
 }
 
+interface PositionedTextGlyph extends TextGlyph {
+  order: number;
+  lineKey: number;
+}
+
 interface LinkAnnotation {
   pageIndex: number;
   href: string;
@@ -1757,154 +1762,189 @@ function extractPageText(
   options: ResolvedHtmlToPdfProOptions
 ): TextGlyph[] {
   const rootRect = layout.root.getBoundingClientRect();
-  const glyphs: TextGlyph[] = [];
+  const positionedGlyphs: PositionedTextGlyph[] = [];
   const range = document.createRange();
+  let order = 0;
 
   for (const node of collectTextNodes(layout.root)) {
     const parent = node.parentElement;
     if (!parent) continue;
     const computed = window.getComputedStyle(parent);
-    const fontSize = Math.max(1, parseCssLengthToPx(computed.fontSize || '12px') * layout.zoom);
-    const tokens = tokenizeTextForExtraction(node.nodeValue ?? '', computed.whiteSpace);
-    const lines = new Map<number, Array<{ text: string; xPx: number; yPx: number; widthPx: number; heightPx: number; order: number }>>();
+    if (computed.color === 'transparent' || computed.fontSize === '0px') continue;
 
-    for (const token of tokens) {
+    const raw = node.nodeValue ?? '';
+    const segments = segmentTextWithOffsets(raw);
+    const fontSize = Math.max(1, parseCssLengthToPx(computed.fontSize || '12px') * layout.zoom);
+    const isWhitespacePreserved = /pre|break-spaces/i.test(computed.whiteSpace || 'normal');
+
+    for (const segment of segments) {
+      // Under normal white-space handling browsers collapse many source whitespace code points.
+      // Range rects are the source of truth: only code points with a visible client rect become
+      // selectable glyphs. Preserved whitespace keeps its source character when a rect exists.
+      const text = segment.text.trim()
+        ? segment.text
+        : isWhitespacePreserved
+          ? segment.text.replace(/\r\n?/g, '\n')
+          : ' ';
+
       try {
-        range.setStart(node, token.start);
-        range.setEnd(node, token.end);
+        range.setStart(node, segment.start);
+        range.setEnd(node, segment.end);
       } catch {
+        order += 1;
         continue;
       }
 
-      const rect = Array.from(range.getClientRects()).find((item) => item.width > 0 || item.height > 0);
-      if (!rect) continue;
+      const rect = bestRangeRect(range);
+      if (!rect || rect.width <= 0 || rect.height <= 0) {
+        order += 1;
+        continue;
+      }
 
       const topInSource = rect.top - rootRect.top;
-      if (topInSource < page.startY - 1 || topInSource > page.endY + 1) continue;
+      const bottomInSource = rect.bottom - rootRect.top;
+      if (bottomInSource < page.startY - 1 || topInSource > page.endY + 1) {
+        order += 1;
+        continue;
+      }
 
       const xPx = layout.metrics.margin.left + layout.xOffsetPx + (rect.left - rootRect.left) * layout.zoom;
       const yTop = layout.metrics.margin.top + (topInSource - page.startY) * layout.zoom;
-      const yPx = yTop + rect.height * layout.zoom * 0.78;
-      const lineKey = Math.round(yPx * 2) / 2;
-      const widthPx = Math.max(1, rect.width * layout.zoom);
-      const heightPx = Math.max(1, rect.height * layout.zoom);
-      const line = lines.get(lineKey) ?? [];
-      line.push({ text: token.text, xPx, yPx, widthPx, heightPx, order: line.length });
-      lines.set(lineKey, line);
-    }
+      const widthPx = Math.max(0.01, rect.width * layout.zoom);
+      const heightPx = Math.max(0.01, rect.height * layout.zoom);
+      const yPx = yTop + heightPx * 0.78;
+      const lineKey = Math.round((yTop + heightPx / 2) * 1.5);
 
-    for (const line of Array.from(lines.values()).sort((a, b) => (a[0]?.yPx ?? 0) - (b[0]?.yPx ?? 0))) {
-      const sorted = line.sort((a, b) => a.xPx - b.xPx || a.order - b.order);
-      for (const chunk of chunkExtractionLine(sorted)) {
-        glyphs.push({
-        text: chunk.text,
+      positionedGlyphs.push({
+        text,
         pageIndex: page.index,
-        xPx: chunk.xPx,
-        yPx: chunk.yPx,
-        widthPx: chunk.widthPx,
-        heightPx: chunk.heightPx,
-        fontSizePx: fontSize
+        xPx,
+        yPx,
+        widthPx,
+        heightPx,
+        fontSizePx: fontSize,
+        order,
+        lineKey
       });
-      }
+      order += 1;
     }
   }
 
+  order = appendFormControlGlyphs(positionedGlyphs, layout, page, order);
+  appendHeaderFooterGlyphs(positionedGlyphs, layout, page.index + 1, totalPages, options, order);
   range.detach();
-  appendHeaderFooterGlyphs(glyphs, layout, page.index + 1, totalPages, options);
-  return glyphs;
+
+  return orderGlyphsForPdf(positionedGlyphs).map(({ order: _order, lineKey: _lineKey, ...glyph }) => glyph);
 }
 
-function chunkExtractionLine(
-  tokens: Array<{ text: string; xPx: number; yPx: number; widthPx: number; heightPx: number }>
-): Array<{ text: string; xPx: number; yPx: number; widthPx: number; heightPx: number }> {
-  const chunks: Array<{ text: string; xPx: number; yPx: number; widthPx: number; heightPx: number }> = [];
-  let current = '';
-  let xPx = tokens[0]?.xPx ?? 0;
-  let yPx = tokens[0]?.yPx ?? 0;
-  let widthPx = 0;
-  let heightPx = tokens[0]?.heightPx ?? 0;
-  const max = 80;
+function segmentTextWithOffsets(value: string): Array<{ text: string; start: number; end: number }> {
+  const segments = segmentText(value);
+  const result: Array<{ text: string; start: number; end: number }> = [];
+  let offset = 0;
+  for (const text of segments) {
+    const start = offset;
+    const end = start + text.length;
+    result.push({ text, start, end });
+    offset = end;
+  }
+  return result;
+}
 
-  const flush = () => {
-    const text = current;
-    if (text.trim()) chunks.push({ text, xPx, yPx, widthPx: Math.max(1, widthPx), heightPx: Math.max(1, heightPx) });
-    current = '';
-    widthPx = 0;
-    heightPx = 0;
-  };
+function bestRangeRect(range: Range): DOMRect | undefined {
+  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+  if (!rects.length) return undefined;
+  return rects.reduce((best, rect) => (rect.width * rect.height > best.width * best.height ? rect : best), rects[0]);
+}
 
-  for (const token of tokens) {
-    const pieces = splitExtractionToken(token.text);
-    for (const piece of pieces) {
-      if (!current) {
-        xPx = token.xPx;
-        yPx = token.yPx;
-      }
-      if (current && current.length + piece.length > max) flush();
-      if (!current) {
-        xPx = token.xPx;
-        yPx = token.yPx;
-      }
-      current += piece;
-      const tokenEnd = token.xPx + token.widthPx;
-      widthPx = Math.max(widthPx, tokenEnd - xPx);
-      heightPx = Math.max(heightPx, token.heightPx);
+function orderGlyphsForPdf<T extends PositionedTextGlyph>(glyphs: T[]): T[] {
+  return [...glyphs].sort((a, b) => {
+    if (a.pageIndex !== b.pageIndex) return a.pageIndex - b.pageIndex;
+    const lineDelta = a.lineKey - b.lineKey;
+    if (Math.abs(lineDelta) > 1) return lineDelta;
+    const xDelta = a.xPx - b.xPx;
+    if (Math.abs(xDelta) > 0.5) return xDelta;
+    return a.order - b.order;
+  });
+}
+
+function appendFormControlGlyphs(
+  glyphs: PositionedTextGlyph[],
+  layout: LayoutContext,
+  page: PageSlice,
+  startOrder: number
+): number {
+  const rootRect = layout.root.getBoundingClientRect();
+  let order = startOrder;
+  for (const element of Array.from(layout.root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input,textarea,select'))) {
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+    const value = element instanceof HTMLSelectElement
+      ? element.selectedOptions[0]?.textContent ?? element.value
+      : element.value;
+    if (!value) continue;
+    const pageRect = firstPageRect(element, layout, page, rootRect);
+    if (!pageRect) continue;
+    const fontSizePx = Math.max(1, parseCssLengthToPx(style.fontSize || '12px') * layout.zoom);
+    const paddingLeft = parseCssLengthToPx(style.paddingLeft || '0') * layout.zoom;
+    let cursorX = pageRect.x + paddingLeft;
+    const yPx = pageRect.y + pageRect.height / 2 + fontSizePx * 0.35;
+    const measurer = getTextMeasureContext();
+    measurer.font = canvasFontFromStyle(style);
+    for (const segment of segmentText(value)) {
+      const widthPx = Math.max(1, measurer.measureText(segment).width * layout.zoom);
+      glyphs.push({
+        text: segment,
+        pageIndex: page.index,
+        xPx: cursorX,
+        yPx,
+        widthPx,
+        heightPx: fontSizePx * 1.2,
+        fontSizePx,
+        order,
+        lineKey: Math.round((pageRect.y + pageRect.height / 2) * 1.5)
+      });
+      cursorX += widthPx;
+      order += 1;
     }
   }
-  flush();
-  return chunks;
+  return order;
 }
 
-function splitExtractionToken(value: string): string[] {
-  const max = 60;
-  if (value.length <= max) return [value];
-  const chunks: string[] = [];
-  for (let index = 0; index < value.length; index += max) {
-    chunks.push(value.slice(index, index + max));
-  }
-  return chunks;
+let cachedMeasureCanvas: HTMLCanvasElement | undefined;
+let cachedMeasureContext: CanvasRenderingContext2D | undefined;
+
+function getTextMeasureContext(): CanvasRenderingContext2D {
+  if (cachedMeasureContext) return cachedMeasureContext;
+  cachedMeasureCanvas = document.createElement('canvas');
+  const context = cachedMeasureCanvas.getContext('2d');
+  if (!context) throw new Error('Canvas 2D context is not available for text measurement.');
+  cachedMeasureContext = context;
+  return context;
 }
 
-interface ExtractionToken {
-  start: number;
-  end: number;
-  text: string;
-}
-
-function tokenizeTextForExtraction(value: string, whiteSpace: string): ExtractionToken[] {
-  const preserve = /pre|break-spaces/i.test(whiteSpace);
-  const tokens: ExtractionToken[] = [];
-  const regex = /\S+\s*/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(value))) {
-    const raw = match[0];
-    const text = preserve ? raw : raw.replace(/\s+/g, ' ');
-    if (!text) continue;
-    tokens.push({ start: match.index, end: match.index + raw.length, text });
-  }
-
-  return tokens;
-}
 function appendHeaderFooterGlyphs(
-  glyphs: TextGlyph[],
+  glyphs: PositionedTextGlyph[],
   layout: LayoutContext,
   pageNumber: number,
   totalPages: number,
-  options: ResolvedHtmlToPdfProOptions
-): void {
-  if (options.header) appendLineGlyphs(glyphs, layout, options.header, pageNumber, totalPages, 'header');
-  if (options.footer) appendLineGlyphs(glyphs, layout, options.footer, pageNumber, totalPages, 'footer');
+  options: ResolvedHtmlToPdfProOptions,
+  startOrder: number
+): number {
+  let order = startOrder;
+  if (options.header) order = appendLineGlyphs(glyphs, layout, options.header, pageNumber, totalPages, 'header', order);
+  if (options.footer) order = appendLineGlyphs(glyphs, layout, options.footer, pageNumber, totalPages, 'footer', order);
+  return order;
 }
 
 function appendLineGlyphs(
-  glyphs: TextGlyph[],
+  glyphs: PositionedTextGlyph[],
   layout: LayoutContext,
   config: HtmlToPdfHeaderFooter,
   pageNumber: number,
   totalPages: number,
-  slot: 'header' | 'footer'
-): void {
+  slot: 'header' | 'footer',
+  startOrder: number
+): number {
   const text = formatPageText(config.text, pageNumber, totalPages);
   const size = config.fontSizePx ?? 10;
   const estimatedWidth = text.length * size * 0.52;
@@ -1914,7 +1954,18 @@ function appendLineGlyphs(
   const y = slot === 'header'
     ? Math.max(4, layout.metrics.margin.top / 2 + size / 2)
     : layout.metrics.heightPx - Math.max(4, layout.metrics.margin.bottom / 2 - size / 2);
-  glyphs.push({ text, pageIndex: pageNumber - 1, xPx: x, yPx: y, widthPx: estimatedWidth, heightPx: size * 1.2, fontSizePx: size });
+  glyphs.push({
+    text,
+    pageIndex: pageNumber - 1,
+    xPx: x,
+    yPx: y,
+    widthPx: estimatedWidth,
+    heightPx: size * 1.2,
+    fontSizePx: size,
+    order: startOrder,
+    lineKey: Math.round(y * 1.5)
+  });
+  return startOrder + text.length;
 }
 
 function extractPageLinks(layout: LayoutContext, page: PageSlice): LinkAnnotation[] {

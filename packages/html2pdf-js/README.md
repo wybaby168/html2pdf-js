@@ -57,8 +57,12 @@ The default engine is `dom-canvas-text`:
 3. Measure layout with the browser's native engine.
 4. Compute page slices with built-in pagination rules.
 5. Render each page visually with the built-in DOM Canvas Painter, without html2canvas or SVG foreignObject screenshots.
-6. Extract text boxes with `Range.getClientRects()`.
+6. Extract text boxes with `Range.getClientRects()` per grapheme so wrapped CJK/continuous text does not lose characters.
 7. Write the PDF directly with image XObjects, topmost invisible selectable Unicode text layer, link annotations, and bookmarks.
+
+## Verification
+
+The repository test suite generates PDFs in real Chromium and validates them with `pdfinfo`, `pdftotext`, `pdftotext -bbox`, and `pdftohtml -xml`. It covers the basic smoke case, the full business demo, and a complex-elements case with wrapped CJK text, inline content, grid/list/table, form controls, and pre/code blocks.
 
 ## License
 

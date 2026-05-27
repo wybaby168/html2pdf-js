@@ -207,15 +207,17 @@ async function main() {
 
   const extracted = runRequired('pdftotext', [pdfPath, '-']);
   const bbox = runRequired('pdftotext', ['-bbox', pdfPath, '-']);
-  if (!bbox.includes('Selectable Text Smoke Test')) {
-    throw new Error(`Missing selectable bounding boxes for browser smoke text. BBox output:
+  for (const word of ['Selectable', 'Text', 'Smoke', 'Test']) {
+    if (!bbox.includes(`>${word}</word>`)) {
+      throw new Error(`Missing selectable bounding box word for browser smoke text: ${word}. BBox output:
 ${bbox.slice(0, 1000)}`);
+    }
   }
   const htmlPrefix = path.join(outputDir, 'browser-smoke-pdftohtml');
   await rm(`${htmlPrefix}.xml`, { force: true });
   runRequired('pdftohtml', ['-xml', '-f', '1', '-l', '1', pdfPath, htmlPrefix]);
   const htmlXml = await readFile(`${htmlPrefix}.xml`, 'utf8');
-  if (!htmlXml.includes('<text') || !htmlXml.includes('Selectable Text Smoke Test') || !htmlXml.includes('opacity="0.000000"')) {
+  if (!htmlXml.includes('<text') || !htmlXml.includes('Selectable') || !htmlXml.includes('Smoke') || !htmlXml.includes('opacity="0.000000"')) {
     throw new Error(`pdftohtml did not expose a transparent selectable text overlay. XML output:
 ${htmlXml.slice(0, 1200)}`);
   }

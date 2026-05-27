@@ -25,7 +25,7 @@ HTMLElement / HTML string / Markdown
   -> 浏览器真实布局测量
   -> 自研分页算法
   -> DOM Canvas Painter 生成视觉层，逐元素绘制背景、圆角、阴影、边框、文本、表格与常见替换元素
-  -> Range.getClientRects 计算文字坐标
+  -> Range.getClientRects 按 grapheme/逐字计算文字坐标，处理中文连续文本和自动换行
   -> 自研 PDF Writer 先写 image XObject，再写 0 透明度的顶层可选文字层、链接、书签
   -> Blob 自动下载
 ```
@@ -248,7 +248,7 @@ const exporter = new HtmlToPdfPro({
 | HTML 常用元素 | 使用浏览器 DOM 布局，组件读取 computed style 后自绘语义元素、表格、列表、表单、图片与 Canvas |
 | CSS 选择器与布局 | 复用浏览器真实 CSS 结果，覆盖 Flex、Grid、定位、变换、渐变、阴影、圆角、自定义属性等浏览器能力 |
 | Markdown | 内置轻量 Markdown 到 HTML 转换，再走 HTML 导出管线 |
-| 字体 | 视觉层保留浏览器字体效果；文字层通过 Type0/CIDFont、ToUnicode、ActualText 和 0 透明度 ExtGState 保证复制/搜索；可通过 `fontFaces` 注入视觉字体声明 |
+| 字体 | 视觉层保留浏览器字体效果；文字层按 grapheme 逐字写入 Type0/CIDFont、ToUnicode、ActualText 和 0 透明度 ExtGState，保证复制/搜索；可通过 `fontFaces` 注入视觉字体声明 |
 | 图片 | 支持 img 与 Canvas 内联；视觉层由自研 Canvas Painter 输出后写入 PDF image XObject |
 | 链接 | 根据 `<a href>` 的 DOM 矩形生成 PDF Link Annotation |
 | 书签目录 | 根据 `h1`~`h6` 或 `data-pdf-bookmark` 生成 PDF Outlines |
@@ -337,12 +337,37 @@ export function Report() {
 }
 ```
 
-## 14. 生产注意事项
+
+## 14. 内置回归测试
+
+```bash
+npm run test:pdf
+```
+
+该命令会：
+
+1. 编译 TypeScript 包；
+2. 启动真实 Chromium；
+3. 在浏览器里调用 `HtmlToPdfPro.toPdf()` 生成 PDF；
+4. 用 `pdfinfo` 验证页数和 PDF 版本；
+5. 用 `pdftotext` 验证复制文本完整性；
+6. 用 `pdftotext -bbox` 验证文字有可选择坐标；
+7. 用 `pdftohtml -xml` 验证透明文字层节点存在。
+
+当前内置三份样例：
+
+| 文件 | 覆盖内容 |
+|---|---|
+| `tests/output/browser-smoke.pdf` | 基础分页、渐变、圆角、表格、文字复制 |
+| `tests/output/full-demo.pdf` | 最开始的项目报告页面、中文段落、长表格、5 页分页 |
+| `tests/output/complex-elements.pdf` | 连续中文换行、inline、grid、list、table、表单、pre/code |
+
+## 15. 生产注意事项
 
 1. **跨域资源**：图片、CSS、字体最好使用同域或开启 CORS，否则资源无法内联时可能影响视觉层。
 2. **中文字体**：视觉层会按浏览器显示结果输出；文字层使用 Unicode 映射与嵌入式透明选择字体保证复制/搜索，不依赖系统中文字体嵌入。
 3. **超大文档**：`dpi` 越高越清晰，也越占内存。长合同、长报表建议先用 180~192 DPI。
 4. **图表库**：ECharts、Chart.js、SVG 图表、Canvas 图表建议在动画完成后再调用导出。
 5. **伪元素**：普通文本型 `::before` / `::after` 会物化；复杂背景图/计数器建议直接写入 DOM 或用额外 CSS 控制。
-6. **文本复制顺序**：可选文字层按 DOM 文本和坐标提取，并写在视觉图片层之后，避免图片层遮挡选择命中。极复杂多栏布局建议单独做回归样例。
+6. **文本复制顺序**：可选文字层按 DOM 文本和坐标提取，并写在视觉图片层之后，避免图片层遮挡选择命中。4.0.4 起默认按 grapheme 逐字测量，解决连续中文在自动换行处丢字的问题。极复杂多栏布局建议单独做回归样例。
 7. **PDF 可编辑性**：该方案目标是高保真归档与复制搜索，不是把每个 CSS box 转成可编辑 PDF 矢量对象。

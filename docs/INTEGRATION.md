@@ -1,45 +1,52 @@
 # HtmlToPdfPro 对接文档
 
-## 1. 能力说明
+## 1. 定位
 
-HtmlToPdfPro 是纯前端 TypeScript 组件，用于把业务 HTML 页面导出为高保真 PDF。它适合以下场景：
+HtmlToPdfPro 是一个纯前端 TypeScript HTML 转 PDF 组件。当前版本的目标是：
 
-- 合同、协议、报价单、账单、发票预览页；
-- 运营报表、项目报告、审批流附件；
-- 需要保留复杂样式、渐变、圆角、阴影、Grid/Flex 布局、长表格分页的页面；
-- 不希望引入服务端 PDF 渲染服务的轻量化业务。
+- 尽量原样输出已有业务 HTML 页面；
+- 不引用 IronPress；
+- 不使用 `html2canvas`；
+- 不依赖 `jsPDF`；
+- 不打开浏览器打印框；
+- 自动下载 PDF；
+- PDF 内文字可复制、可搜索；
+- 尽量保留链接、目录、复杂样式和优雅分页。
 
-组件不重新实现 HTML/CSS 排版，而是复用浏览器渲染结果，再结合 Paged.js 的分页能力做高保真导出。
+## 2. 架构
 
-## 2. 安装依赖
+```text
+HTMLElement / HTML string / Markdown
+  -> DOM 克隆与状态同步
+  -> 安全清理 script / iframe / event handler
+  -> 收集 style、CSSOM、外部 CSS、font-face、extraCss
+  -> 内联图片、SVG image、Canvas
+  -> 可选物化 ::before / ::after 文本
+  -> 浏览器真实布局测量
+  -> 自研分页算法
+  -> SVG foreignObject + Canvas 生成视觉层
+  -> Range.getClientRects 计算文字坐标
+  -> 自研 PDF Writer 写入 image XObject、透明文字层、链接、书签
+  -> Blob 自动下载
+```
+
+组件没有重新造一个完整浏览器。复杂 CSS 布局仍交给浏览器，这样才能最大化还原现有页面；组件自研的是导出管线、分页、文字坐标、PDF 结构和下载流程。
+
+## 3. 安装
 
 ```bash
 pnpm add @flyfish-dev/html2pdf-js
 ```
 
-或使用 npm：
+或：
 
 ```bash
 npm install @flyfish-dev/html2pdf-js
 ```
-本组件包会安装 `html2canvas` 和 `jspdf` 运行时依赖。分页脚本建议自托管：本仓库 demo 已把固定版本 Paged.js polyfill 放在 `public/vendor/paged.polyfill.js`，npm 包中也保留了 `vendor/paged.polyfill.js`，可复制到业务项目的静态资源目录。
 
+当前包没有运行时渲染依赖，不会安装 IronPress、html2canvas、jsPDF、Paged.js。
 
-## 3. 引入组件
-
-从 npm 包引入组件：
-
-```ts
-import { HtmlToPdfPro } from '@flyfish-dev/html2pdf-js';
-```
-
-当前仓库 demo 也是通过同一个包名引用组件：
-
-```ts
-import { HtmlToPdfPro, type HtmlToPdfProgressEvent } from '@flyfish-dev/html2pdf-js';
-```
-
-## 4. 最小接入示例
+## 4. 最小接入
 
 HTML：
 
@@ -61,11 +68,13 @@ const exporter = new HtmlToPdfPro({
   filename: 'report.pdf',
   page: { format: 'a4' },
   margin: '18mm 14mm 19mm 14mm',
-  scale: 2.5,
-  imageType: 'jpeg',
+  dpi: 192,
   imageQuality: 0.96,
-  useCORS: true,
-  pagedScriptUrl: new URL('./vendor/paged.polyfill.js', window.location.href).toString()
+  fitToPage: true,
+  textLayer: true,
+  linkAnnotations: true,
+  bookmarks: true,
+  footer: 'Page {page} of {pages}'
 });
 
 document.querySelector('#download')?.addEventListener('click', async () => {
@@ -73,284 +82,267 @@ document.querySelector('#download')?.addEventListener('click', async () => {
 });
 ```
 
-## 5. 推荐分页 CSS
+## 5. 输入源
 
-把分页规则写在业务 CSS 中，组件会自动收集当前页面的 `style` 和 `link[rel="stylesheet"]` 并注入到渲染 iframe。
+### CSS 选择器
 
-```css
-@page {
-  size: A4;
-  margin: 18mm 14mm 19mm 14mm;
+```ts
+await exporter.download('#report');
+```
 
-  @top-left {
-    content: "业务报告";
-    color: #667085;
-    font-size: 8.5pt;
-  }
+### HTMLElement
 
-  @bottom-center {
-    content: "第 " counter(page) " / " counter(pages) " 页";
-    color: #667085;
-    font-size: 8.5pt;
-  }
-}
+```ts
+const el = document.querySelector('#report') as HTMLElement;
+await exporter.download(el);
+```
 
-.pdf-page-break {
-  break-before: page;
-  page-break-before: always;
-}
+### HTML 字符串
 
-.pdf-avoid-break,
-.avoid-break,
-.card,
-figure,
-pre,
-blockquote {
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
+```ts
+await exporter.downloadHtml('<article><h1>Hello</h1><p>PDF text is copyable.</p></article>');
+```
 
-thead { display: table-header-group; }
-tfoot { display: table-footer-group; }
-tr {
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
+### Markdown 字符串
+
+```ts
+await exporter.downloadMarkdown(`
+# 周报
+
+- 目标达成 92%
+- 风险等级低
+`);
 ```
 
 ## 6. API
 
 ### `new HtmlToPdfPro(options?)`
 
-创建导出实例。建议在页面或模块初始化时创建一次。
-
-```ts
-const exporter = new HtmlToPdfPro({
-  filename: 'report.pdf',
-  page: { format: 'a4' },
-  scale: 2.5
-});
-```
+创建导出实例。建议在页面初始化时创建一次。
 
 ### `download(source, options?)`
 
-生成并下载 PDF。`source` 可以是 CSS 选择器或 `HTMLElement`。
+生成并自动下载 PDF。
 
 ```ts
-await exporter.download('#report');
-await exporter.download(document.querySelector('#report') as HTMLElement, {
-  filename: 'custom-name.pdf'
+await exporter.download('#report', {
+  filename: 'customer-report.pdf'
 });
 ```
 
 ### `toPdf(source, options?)`
 
-返回 `jsPDF` 实例，适合继续自定义处理。
+返回 PDF bytes。
 
 ```ts
-const pdf = await exporter.toPdf('#report');
-pdf.save('report.pdf');
+const bytes = await exporter.toPdf('#report');
 ```
 
 ### `outputBlob(source, options?)`
 
-返回 `Blob`，适合上传到接口、写入 IndexedDB 或自定义保存。
+返回 PDF Blob。
 
 ```ts
 const blob = await exporter.outputBlob('#report');
-const formData = new FormData();
-formData.append('file', blob, 'report.pdf');
-await fetch('/api/upload', { method: 'POST', body: formData });
+const form = new FormData();
+form.append('file', blob, 'report.pdf');
+await fetch('/api/upload', { method: 'POST', body: form });
+```
+
+### `serialize(source, options?)`
+
+返回引擎内部的独立 HTML 快照，适合排查样式、资源、伪元素和状态同步问题。
+
+```ts
+const html = await exporter.serialize('#report');
 ```
 
 ### `nativePrint(source, options?)`
 
-创建分页 DOM 后打开浏览器打印弹窗。该路径由浏览器打印引擎输出，通常更适合需要可复制文字/可搜索文本的 PDF。
+保留兼容方法，只作为 fallback。主链路不使用打印框。
 
-```ts
-await exporter.nativePrint('#report');
-```
-
-### `createPagedFrame(source, options?)`
-
-只创建分页 iframe，不生成 PDF，适合调试分页结果。
-
-```ts
-await exporter.createPagedFrame('#report', {
-  debug: true,
-  removeContainer: false
-});
-```
-
-## 7. Options 配置
+## 7. Options
 
 | 参数 | 类型 | 默认值 | 说明 |
 |---|---|---:|---|
 | `filename` | `string` | `document.pdf` | 下载文件名 |
-| `page.format` | `a4` / `letter` / `legal` / `string` | `a4` | 内置纸张尺寸；自定义尺寸可传 `widthMm` / `heightMm` |
-| `page.widthMm` | `number` | `210` | 页面宽度，单位 mm |
-| `page.heightMm` | `number` | `297` | 页面高度，单位 mm |
+| `page.format` | `a4` / `letter` / `legal` / `string` | `a4` | 内置纸张尺寸 |
+| `page.widthMm` | `number` | `210` | 自定义页面宽度 |
+| `page.heightMm` | `number` | `297` | 自定义页面高度 |
 | `page.orientation` | `portrait` / `landscape` | `portrait` | 页面方向 |
-| `margin` | `string` | `18mm 14mm 18mm 14mm` | 默认 `@page` 边距，业务 CSS 可覆盖 |
-| `scale` | `number` / `null` | `2~3` | html2canvas 渲染倍率，越大越清晰，也越耗内存 |
-| `imageType` | `jpeg` / `png` | `jpeg` | PDF 内页图像格式 |
-| `imageQuality` | `number` | `0.96` | JPEG 质量，`png` 时基本无效 |
-| `backgroundColor` | `string` | `#ffffff` | 页面背景色 |
-| `useCORS` | `boolean` | `true` | 尝试以 CORS 方式加载图片 |
-| `allowTaint` | `boolean` | `false` | 是否允许污染 Canvas，不建议开启 |
-| `foreignObjectRendering` | `boolean` | `false` | html2canvas 的 SVG foreignObject 渲染模式 |
-| `removeContainer` | `boolean` | `true` | 导出后是否移除隐藏 iframe |
-| `debug` | `boolean` | `false` | 是否保留隐藏 iframe 方便调试 |
-| `pagedScriptUrl` | `string` | Paged.js CDN 固定版本 | Paged.js polyfill 地址，生产建议自托管 |
-| `extraCss` | `string` | `''` | 注入渲染 iframe 的额外 CSS |
-| `timeoutMs` | `number` | `15000` | 分页脚本和预览超时时间 |
-| `onProgress` | `function` | 空函数 | 导出进度回调 |
+| `margin` | `string` | `18mm 14mm 18mm 14mm` | 页面边距，支持 `px` / `pt` / `mm` / `cm` / `in` |
+| `dpi` | `number` | `180` | 视觉层分辨率 |
+| `imageQuality` | `number` | `0.94` | JPEG 质量 |
+| `backgroundColor` | `string \| null` | `#ffffff` | 页面背景 |
+| `fitToPage` | `boolean` | `true` | 保留原布局并等比缩放到内容区域 |
+| `bleedPx` | `number` | `24` | 页面切片安全边距 |
+| `pageBreakMode` | `slice` / `avoid` | `avoid` | 分页策略 |
+| `avoidBreakSelectors` | `string` | 内置 | 避免断页选择器 |
+| `forceBreakBeforeSelectors` | `string` | `.pdf-page-break,[data-pdf-page-break="before"]` | 强制分页选择器 |
+| `collectStyles` | `boolean` | `true` | 收集当前页面 CSS |
+| `includeExternalStylesheets` | `boolean` | `true` | 尝试读取外链 CSS |
+| `inlineImages` | `boolean` | `true` | 尝试把图片内联为 data URL |
+| `inlineCanvas` | `boolean` | `true` | 把 Canvas 转为图片 |
+| `inlineCssResources` | `boolean` | `false` | 尝试内联 style 中的 `url(...)` |
+| `materializePseudoElements` | `boolean` | `true` | 物化伪元素文本 |
+| `sanitize` | `boolean` | `true` | 移除脚本和事件属性 |
+| `textLayer` | `boolean` | `true` | 生成透明文字层 |
+| `linkAnnotations` | `boolean` | `true` | 生成链接标注 |
+| `bookmarks` | `boolean` | `true` | 由标题生成 PDF 书签 |
+| `header` | `string \| object` | - | 页眉文本，支持 `{page}` / `{pages}` |
+| `footer` | `string \| object` | - | 页脚文本，支持 `{page}` / `{pages}` |
+| `extraCss` | `string` | `''` | 导出时额外 CSS |
+| `fontFaces` | `HtmlToPdfFontFace[]` | `[]` | 注入 `@font-face` |
+| `resourceErrorMode` | `ignore` / `warn` / `throw` | `warn` | 资源内联失败策略 |
+| `onProgress` | `function` | 空函数 | 进度回调 |
 
-## 8. 进度回调
+## 8. 分页控制
+
+强制新页：
+
+```html
+<section class="pdf-page-break">费用明细</section>
+```
+
+避免模块被切开：
+
+```html
+<div class="avoid-break">签章区</div>
+<div class="pdf-avoid-break">费用卡片</div>
+```
+
+自定义选择器：
+
+```ts
+const exporter = new HtmlToPdfPro({
+  forceBreakBeforeSelectors: '.chapter,[data-break-before]',
+  avoidBreakSelectors: '.card,.invoice-row,.signature-block,table,tr'
+});
+```
+
+## 9. 页眉页脚
+
+```ts
+const exporter = new HtmlToPdfPro({
+  header: {
+    text: 'Customer Report',
+    position: 'left',
+    fontSizePx: 10,
+    color: '#667085'
+  },
+  footer: {
+    text: 'Page {page} of {pages}',
+    position: 'center'
+  }
+});
+```
+
+页眉页脚会同时进入视觉层和透明文字层。
+
+## 10. 对 IronPress README 能力的前端映射
+
+本项目没有引用 IronPress，但参考了“内置布局、HTML/CSS/Markdown 到 PDF、字体、图片、链接、目录、安全清洗”的产品思路，映射如下：
+
+| 能力方向 | HtmlToPdfPro 当前实现 |
+|---|---|
+| HTML 常用元素 | 使用浏览器 DOM 渲染，支持浏览器可渲染的语义元素、表格、列表、表单、图片、SVG、Canvas |
+| CSS 选择器与布局 | 复用浏览器真实 CSS 结果，覆盖 Flex、Grid、定位、变换、渐变、阴影、圆角、自定义属性等浏览器能力 |
+| Markdown | 内置轻量 Markdown 到 HTML 转换，再走 HTML 导出管线 |
+| 字体 | 视觉层保留浏览器字体效果；文字层通过 ToUnicode 保证复制/搜索；可通过 `fontFaces` 注入字体声明 |
+| 图片 | 支持 img、SVG image、Canvas 内联；视觉层写入 PDF image XObject |
+| 链接 | 根据 `<a href>` 的 DOM 矩形生成 PDF Link Annotation |
+| 书签目录 | 根据 `h1`~`h6` 或 `data-pdf-bookmark` 生成 PDF Outlines |
+| 安全清洗 | 默认移除 `script`、`iframe`、`object`、`embed`、事件属性和 `javascript:` URL |
+| 浏览器/WASM/服务端 | 当前交付为纯浏览器 TypeScript 组件，无 WASM 运行时依赖 |
+| 流式输出 | 浏览器端返回 `Uint8Array` / `Blob`，可自行上传或持久化 |
+
+## 11. 进度回调
 
 ```ts
 const exporter = new HtmlToPdfPro({
   onProgress(event) {
     switch (event.phase) {
       case 'clone':
-        console.log('复制 DOM 和样式');
+        console.log('克隆 DOM');
         break;
       case 'assets':
-        console.log('等待资源加载');
+        console.log('内联资源');
         break;
-      case 'pagedjs':
-        console.log('正在分页');
-        break;
-      case 'paginated':
-        console.log('分页完成', event.totalPages);
+      case 'paginate':
+        console.log('分页');
         break;
       case 'render-page':
-        console.log(`渲染第 ${event.page}/${event.totalPages} 页`, event.ratio);
+        console.log(`生成第 ${event.page}/${event.totalPages} 页`);
         break;
-      case 'save':
-        console.log('保存完成', event.filename);
+      case 'pdf':
+        console.log('组装 PDF');
         break;
     }
   }
 });
 ```
 
-进度阶段：
+## 12. Vue 接入示例
 
-```text
-clone -> assets -> pagedjs -> paginated -> render-start -> render-page* -> render-complete -> save
-```
-
-## 9. Vue / React 对接示例
-
-### Vue 3
-
-```ts
+```vue
+<script setup lang="ts">
 import { ref } from 'vue';
 import { HtmlToPdfPro } from '@flyfish-dev/html2pdf-js';
 
 const reportRef = ref<HTMLElement | null>(null);
-const exporter = new HtmlToPdfPro({ filename: 'report.pdf' });
+
+const exporter = new HtmlToPdfPro({
+  filename: 'vue-report.pdf',
+  footer: 'Page {page} of {pages}'
+});
 
 async function exportPdf() {
   if (!reportRef.value) return;
   await exporter.download(reportRef.value);
 }
-```
+</script>
 
-```vue
 <template>
   <button @click="exportPdf">导出 PDF</button>
-  <article ref="reportRef">...</article>
+  <article ref="reportRef">
+    <h1>Vue Report</h1>
+  </article>
 </template>
 ```
 
-### React
+## 13. React 接入示例
 
 ```tsx
-import { useMemo, useRef } from 'react';
+import { useRef } from 'react';
 import { HtmlToPdfPro } from '@flyfish-dev/html2pdf-js';
 
-export function ReportPage() {
-  const reportRef = useRef<HTMLElement | null>(null);
-  const exporter = useMemo(() => new HtmlToPdfPro({ filename: 'report.pdf' }), []);
+const exporter = new HtmlToPdfPro({
+  filename: 'react-report.pdf',
+  footer: 'Page {page} of {pages}'
+});
+
+export function Report() {
+  const ref = useRef<HTMLElement>(null);
 
   return (
     <>
-      <button onClick={() => reportRef.current && exporter.download(reportRef.current)}>
+      <button onClick={() => ref.current && exporter.download(ref.current)}>
         导出 PDF
       </button>
-      <article ref={reportRef}>...</article>
+      <article ref={ref}>
+        <h1>React Report</h1>
+      </article>
     </>
   );
 }
 ```
 
-## 10. 资源规范
+## 14. 生产注意事项
 
-### 图片
-
-- 最稳妥：业务图片与页面同源。
-- 使用 CDN 图片时，需要响应头允许 CORS。
-- 图片标签建议保留自然宽高或 CSS 尺寸，避免导出前后布局抖动。
-
-### 字体
-
-- 建议本地化或同源加载字体。
-- 组件会等待 `document.fonts.ready`，但跨域字体依然需要正确 CORS。
-
-### Canvas / 图表
-
-组件会尝试把源页面中的 `canvas` 转成图片后再注入分页 iframe，常见图表和签名板可以保留。若 Canvas 本身已被跨域资源污染，则无法序列化。
-
-## 11. 质量与性能建议
-
-- `scale: 2`：文件更小、速度更快，适合普通报表。
-- `scale: 2.5`：推荐平衡值，demo 默认使用。
-- `scale: 3`：更清晰，但内存和耗时明显增加。
-- 超长页面建议拆分为多个报告或分段导出。
-- 大量高清图片建议先压缩到业务可接受尺寸。
-
-## 12. 常见问题
-
-### 为什么自动下载的 PDF 文字不能选择？
-
-自动下载路径使用 html2canvas 逐页渲染为图片，再由 jsPDF 封装成 PDF。它优先保证视觉高保真，但不是文本语义 PDF。需要可复制/搜索文本时，使用 `nativePrint()`。
-
-### 为什么图片没有显示或导出失败？
-
-通常是跨域图片没有 CORS，导致 Canvas 被污染。请改为同源图片、配置 CDN CORS，或将图片转为可访问的 data URL。
-
-### 为什么分页位置不理想？
-
-请给卡片、表格行、图表、签章区域添加：
-
-```css
-.avoid-break {
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
-```
-
-必要时用：
-
-```css
-.pdf-page-break {
-  break-before: page;
-  page-break-before: always;
-}
-```
-
-### 生产环境是否建议继续使用 CDN Paged.js？
-
-建议生产环境把 Paged.js polyfill 固定版本并自托管，然后通过 `pagedScriptUrl` 指向你的静态资源地址，避免 CDN 波动影响导出链路。
-
-```ts
-const exporter = new HtmlToPdfPro({
-  pagedScriptUrl: '/vendor/paged.polyfill.js'
-});
-```
-
-## 13. 适用边界
-
-HtmlToPdfPro 定位于纯前端高保真视觉导出。如果业务要求 PDF/A、电子签章、表单字段、目录书签、可访问性标签、长期归档合规等 PDF 语义能力，建议使用服务端 Chromium/Puppeteer 或专业 PDF 引擎作为补充。
+1. **跨域资源**：图片、CSS、字体最好使用同域或开启 CORS，否则资源无法内联时可能影响视觉层。
+2. **中文字体**：视觉层会按浏览器显示结果输出；文字层使用 Unicode 映射保证复制/搜索，不依赖系统中文字体嵌入。
+3. **超大文档**：`dpi` 越高越清晰，也越占内存。长合同、长报表建议先用 180~192 DPI。
+4. **图表库**：ECharts、Chart.js、SVG 图表、Canvas 图表建议在动画完成后再调用导出。
+5. **伪元素**：普通文本型 `::before` / `::after` 会物化；复杂背景图/计数器建议直接写入 DOM 或用额外 CSS 控制。
+6. **文本复制顺序**：透明文字层按 DOM 文本和坐标提取。极复杂多栏布局建议单独做回归样例。
+7. **PDF 可编辑性**：该方案目标是高保真归档与复制搜索，不是把每个 CSS box 转成可编辑 PDF 矢量对象。

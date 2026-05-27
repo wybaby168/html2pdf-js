@@ -1,8 +1,8 @@
 # @flyfish-dev/html2pdf-js
 
-TypeScript browser component for exporting business HTML pages to high-fidelity PDF files.
+Self-contained TypeScript HTML to PDF engine for browser applications. It exports high-fidelity visual PDF pages and overlays a transparent Unicode text layer so generated files remain copyable and searchable.
 
-It is designed for reports, proposals, invoices, statements, contracts, approval documents, and other page-based business documents.
+This package does **not** depend on IronPress, html2canvas, jsPDF, Paged.js, Puppeteer, or the browser print dialog.
 
 ## Install
 
@@ -25,11 +25,13 @@ const exporter = new HtmlToPdfPro({
   filename: 'report.pdf',
   page: { format: 'a4' },
   margin: '18mm 14mm 19mm 14mm',
-  scale: 2.5,
-  imageType: 'jpeg',
+  dpi: 192,
   imageQuality: 0.96,
-  useCORS: true,
-  pagedScriptUrl: '/vendor/paged.polyfill.js'
+  fitToPage: true,
+  textLayer: true,
+  linkAnnotations: true,
+  bookmarks: true,
+  footer: 'Page {page} of {pages}'
 });
 
 await exporter.download('#report');
@@ -38,22 +40,25 @@ await exporter.download('#report');
 ## API
 
 - `download(source, options?)`: generate and download a PDF.
-- `toPdf(source, options?)`: return a `jsPDF` instance.
-- `outputBlob(source, options?)`: return a `Blob` for upload or custom storage.
-- `nativePrint(source, options?)`: open the browser print flow.
-- `createPagedFrame(source, options?)`: create the paged iframe for debugging.
+- `toPdf(source, options?)`: return PDF bytes as `Uint8Array`.
+- `outputBlob(source, options?)`: return a PDF `Blob`.
+- `fromHtml(html, options?)` / `downloadHtml(html, options?)`: render an HTML string.
+- `fromMarkdown(markdown, options?)` / `downloadMarkdown(markdown, options?)`: render Markdown through the same HTML pipeline.
+- `serialize(source, options?)`: export the standalone HTML snapshot used by the engine.
 
-`source` can be a CSS selector string or an `HTMLElement`.
+`source` can be a CSS selector string, an `HTMLElement`, an HTML source object, or a Markdown source object.
 
-## Paged.js
+## Engine
 
-The package includes a pinned Paged.js browser polyfill at:
+The default engine is `dom-canvas-text`:
 
-```text
-@flyfish-dev/html2pdf-js/vendor/paged.polyfill.js
-```
-
-For production apps, copy that file into your static assets and pass its public URL through `pagedScriptUrl`.
+1. Clone DOM and preserve form/canvas state.
+2. Collect CSS and inline assets where possible.
+3. Measure layout with the browser's native engine.
+4. Compute page slices with built-in pagination rules.
+5. Render each page visually via SVG `foreignObject` + Canvas, without html2canvas.
+6. Extract text boxes with `Range.getClientRects()`.
+7. Write the PDF directly with image XObjects, invisible Unicode text layer, link annotations, and bookmarks.
 
 ## License
 

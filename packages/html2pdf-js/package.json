@@ -1,7 +1,7 @@
 {
   "name": "@flyfish-dev/html2pdf-js",
-  "version": "2.0.1",
-  "description": "TypeScript frontend component for high-fidelity HTML to PDF export.",
+  "version": "4.0.0",
+  "description": "Self-contained TypeScript HTML to PDF engine with high-fidelity visual rendering and selectable text layer.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -10,12 +10,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./vendor/paged.polyfill.js": "./vendor/paged.polyfill.js"
+    }
   },
   "files": [
     "dist",
-    "vendor",
     "README.md",
     "LICENSE"
   ],
@@ -29,11 +27,12 @@
     "html-to-pdf",
     "pdf",
     "typescript",
-    "html2canvas",
-    "jspdf",
-    "pagedjs",
+    "copyable-text",
+    "text-layer",
     "frontend",
-    "browser"
+    "browser",
+    "dom-renderer",
+    "canvas"
   ],
   "homepage": "https://htmltopdfpro.vercel.app",
   "repository": {
@@ -48,9 +47,5 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
-  },
-  "dependencies": {
-    "html2canvas": "1.4.1",
-    "jspdf": "4.2.1"
   }
 }

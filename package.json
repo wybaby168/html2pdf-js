@@ -1,9 +1,9 @@
 {
   "name": "htmltopdfpro-demo",
-  "version": "2.0.1",
+  "version": "4.0.0",
   "private": true,
   "type": "module",
-  "description": "Professional high-fidelity HTML to PDF solution, implemented as a pure TypeScript frontend component.",
+  "description": "Self-contained TypeScript HTML to PDF engine with high-fidelity visual rendering and selectable text layer.",
   "homepage": "https://htmltopdfpro.vercel.app",
   "repository": {
     "type": "git",
@@ -13,10 +13,12 @@
     "html-to-pdf",
     "pdf",
     "typescript",
-    "vite",
-    "html2canvas",
-    "jspdf",
-    "pagedjs"
+    "copyable-text",
+    "text-layer",
+    "frontend",
+    "browser",
+    "dom-renderer",
+    "canvas"
   ],
   "packageManager": "pnpm@10.7.0",
   "scripts": {

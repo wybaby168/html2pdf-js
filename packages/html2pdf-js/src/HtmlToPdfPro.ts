@@ -1,30 +1,58 @@
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
-
-export type HtmlToPdfSource = string | HTMLElement;
+export type HtmlToPdfSource = string | HTMLElement | HtmlToPdfHtmlSource | HtmlToPdfMarkdownSource;
 export type HtmlToPdfImageType = 'jpeg' | 'png';
 export type HtmlToPdfOrientation = 'portrait' | 'landscape';
 export type HtmlToPdfPageFormat = 'a4' | 'letter' | 'legal' | string;
+export type HtmlToPdfEngine = 'dom-canvas-text';
+export type HtmlToPdfPageBreakMode = 'slice' | 'avoid';
+export type HtmlToPdfHeaderFooterPosition = 'left' | 'center' | 'right';
 
-export type HtmlToPdfProgressPhase =
-  | 'clone'
-  | 'assets'
-  | 'pagedjs'
-  | 'paginated'
-  | 'render-start'
-  | 'render-page'
-  | 'render-complete'
-  | 'save';
+export interface HtmlToPdfHtmlSource {
+  type: 'html';
+  html: string;
+  baseUrl?: string;
+}
+
+export interface HtmlToPdfMarkdownSource {
+  type: 'markdown';
+  markdown: string;
+  baseUrl?: string;
+}
 
 export interface HtmlToPdfPageOptions {
-  /** Built-in: a4 / letter / legal. Custom names are ignored unless widthMm and heightMm are provided. */
   format?: HtmlToPdfPageFormat;
-  /** Custom page width, millimetres. */
   widthMm?: number;
-  /** Custom page height, millimetres. */
   heightMm?: number;
   orientation?: HtmlToPdfOrientation;
 }
+
+export interface HtmlToPdfFontFace {
+  fontFamily: string;
+  src: string;
+  fontWeight?: string | number;
+  fontStyle?: string;
+  fontDisplay?: string;
+  unicodeRange?: string;
+}
+
+export interface HtmlToPdfHeaderFooter {
+  text: string;
+  position?: HtmlToPdfHeaderFooterPosition;
+  fontSizePx?: number;
+  color?: string;
+  offsetPx?: number;
+}
+
+export type HtmlToPdfProgressPhase =
+  | 'clone'
+  | 'styles'
+  | 'assets'
+  | 'layout'
+  | 'paginate'
+  | 'render-start'
+  | 'render-page'
+  | 'text-layer'
+  | 'pdf'
+  | 'save';
 
 export interface HtmlToPdfProgressEvent {
   phase: HtmlToPdfProgressPhase;
@@ -33,7 +61,6 @@ export interface HtmlToPdfProgressEvent {
   totalPages?: number;
   ratio?: number;
   filename?: string;
-  flow?: unknown;
 }
 
 export type HtmlToPdfProgressHandler = (event: HtmlToPdfProgressEvent) => void;
@@ -41,24 +68,37 @@ export type HtmlToPdfProgressHandler = (event: HtmlToPdfProgressEvent) => void;
 export interface HtmlToPdfProOptions {
   filename?: string;
   page?: HtmlToPdfPageOptions;
-  /** CSS @page margin shorthand, for example: 18mm 14mm 19mm 14mm. */
+  /** CSS @page margin shorthand. Supports px, pt, mm, cm and in, for example: 18mm 14mm 19mm 14mm. */
   margin?: string;
-  /** html2canvas scale. Higher means sharper but heavier. Defaults to devicePixelRatio clamped to 2~3. */
-  scale?: number | null;
+  /** Internal export resolution. Visual output is rendered at dpi / 96 scale. */
+  dpi?: number;
   imageType?: HtmlToPdfImageType;
   imageQuality?: number;
-  backgroundColor?: string;
-  useCORS?: boolean;
-  allowTaint?: boolean;
-  foreignObjectRendering?: boolean;
-  removeContainer?: boolean;
-  /** Keep the hidden iframe in DOM for debugging paged output. */
-  debug?: boolean;
-  /** Paged.js browser polyfill URL. Prefer a pinned self-hosted URL in production. */
-  pagedScriptUrl?: string;
-  /** Extra CSS injected into the render iframe after page CSS is collected. */
+  backgroundColor?: string | null;
+  /** If true, shrink the source layout width to the PDF content width while preserving the original layout. */
+  fitToPage?: boolean;
+  /** Extra transparent bleed around each slice to avoid antialiasing seams. */
+  bleedPx?: number;
+  pageBreakMode?: HtmlToPdfPageBreakMode;
+  avoidBreakSelectors?: string;
+  forceBreakBeforeSelectors?: string;
+  collectStyles?: boolean;
+  includeExternalStylesheets?: boolean;
+  inlineImages?: boolean;
+  inlineCanvas?: boolean;
+  inlineCssResources?: boolean;
+  materializePseudoElements?: boolean;
+  sanitize?: boolean;
+  textLayer?: boolean;
+  linkAnnotations?: boolean;
+  bookmarks?: boolean;
+  header?: string | HtmlToPdfHeaderFooter;
+  footer?: string | HtmlToPdfHeaderFooter;
   extraCss?: string;
+  fontFaces?: HtmlToPdfFontFace[];
   timeoutMs?: number;
+  resourceErrorMode?: 'ignore' | 'warn' | 'throw';
+  engine?: HtmlToPdfEngine;
   onProgress?: HtmlToPdfProgressHandler;
 }
 
@@ -66,36 +106,118 @@ export interface ResolvedHtmlToPdfProOptions {
   filename: string;
   page: Required<Pick<HtmlToPdfPageOptions, 'widthMm' | 'heightMm'>> & HtmlToPdfPageOptions;
   margin: string;
-  scale: number;
+  dpi: number;
   imageType: HtmlToPdfImageType;
   imageQuality: number;
-  backgroundColor: string;
-  useCORS: boolean;
-  allowTaint: boolean;
-  foreignObjectRendering: boolean;
-  removeContainer: boolean;
-  debug: boolean;
-  pagedScriptUrl: string;
+  backgroundColor: string | null;
+  fitToPage: boolean;
+  bleedPx: number;
+  pageBreakMode: HtmlToPdfPageBreakMode;
+  avoidBreakSelectors: string;
+  forceBreakBeforeSelectors: string;
+  collectStyles: boolean;
+  includeExternalStylesheets: boolean;
+  inlineImages: boolean;
+  inlineCanvas: boolean;
+  inlineCssResources: boolean;
+  materializePseudoElements: boolean;
+  sanitize: boolean;
+  textLayer: boolean;
+  linkAnnotations: boolean;
+  bookmarks: boolean;
+  header?: HtmlToPdfHeaderFooter;
+  footer?: HtmlToPdfHeaderFooter;
   extraCss: string;
+  fontFaces: HtmlToPdfFontFace[];
   timeoutMs: number;
+  resourceErrorMode: 'ignore' | 'warn' | 'throw';
+  engine: HtmlToPdfEngine;
   onProgress: HtmlToPdfProgressHandler;
 }
 
-export interface PagedFrameResult {
-  iframe: HTMLIFrameElement;
-  window: Window;
-  document: Document;
-  flow: unknown;
-  pages: HTMLElement[];
-  options: ResolvedHtmlToPdfProOptions;
+interface MarginPx {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
 }
 
-type PagedWindow = Window &
-  typeof globalThis & {
-    PagedPolyfill?: {
-      preview: () => unknown | Promise<unknown>;
-    };
-  };
+interface PageMetrics {
+  widthMm: number;
+  heightMm: number;
+  widthPx: number;
+  heightPx: number;
+  widthPt: number;
+  heightPt: number;
+  contentWidthPx: number;
+  contentHeightPx: number;
+  margin: MarginPx;
+}
+
+interface LayoutContext {
+  stage: HTMLDivElement;
+  root: HTMLElement;
+  sourceCss: string;
+  metrics: PageMetrics;
+  layoutWidthPx: number;
+  layoutHeightPx: number;
+  zoom: number;
+  xOffsetPx: number;
+  snapshotHtml: string;
+  cleanup: () => void;
+}
+
+interface PageSlice {
+  index: number;
+  startY: number;
+  endY: number;
+}
+
+interface TextGlyph {
+  text: string;
+  pageIndex: number;
+  xPx: number;
+  yPx: number;
+  fontSizePx: number;
+}
+
+interface LinkAnnotation {
+  pageIndex: number;
+  href: string;
+  xPx: number;
+  yPx: number;
+  widthPx: number;
+  heightPx: number;
+}
+
+interface BookmarkItem {
+  pageIndex: number;
+  title: string;
+  yPx: number;
+  level: number;
+}
+
+interface PageVisual {
+  dataUrl: string;
+  widthPx: number;
+  heightPx: number;
+}
+
+interface PageRenderResult {
+  visual: PageVisual;
+  glyphs: TextGlyph[];
+  links: LinkAnnotation[];
+  bookmarks: BookmarkItem[];
+}
+
+interface PdfPageInput {
+  imageBytes: Uint8Array;
+  imageMime: 'image/jpeg';
+  imageWidth: number;
+  imageHeight: number;
+  glyphs: TextGlyph[];
+  links: LinkAnnotation[];
+}
 
 const PAGE_SIZES_MM: Record<string, readonly [number, number]> = {
   a4: [210, 297],
@@ -112,23 +234,46 @@ const DEFAULT_OPTIONS: ResolvedHtmlToPdfProOptions = {
     orientation: 'portrait'
   },
   margin: '18mm 14mm 18mm 14mm',
-  scale: 0,
+  dpi: 180,
   imageType: 'jpeg',
-  imageQuality: 0.96,
+  imageQuality: 0.94,
   backgroundColor: '#ffffff',
-  useCORS: true,
-  allowTaint: false,
-  foreignObjectRendering: false,
-  removeContainer: true,
-  debug: false,
-  pagedScriptUrl: 'https://unpkg.com/pagedjs@0.4.3/dist/paged.polyfill.js',
+  fitToPage: true,
+  bleedPx: 24,
+  pageBreakMode: 'avoid',
+  avoidBreakSelectors: '.avoid-break,.pdf-avoid-break,figure,table,thead,tr,.card,.hero,.chart,.timeline,.checklist,pre,blockquote',
+  forceBreakBeforeSelectors: '.pdf-page-break,[data-pdf-page-break="before"]',
+  collectStyles: true,
+  includeExternalStylesheets: true,
+  inlineImages: true,
+  inlineCanvas: true,
+  inlineCssResources: false,
+  materializePseudoElements: true,
+  sanitize: true,
+  textLayer: true,
+  linkAnnotations: true,
+  bookmarks: true,
   extraCss: '',
-  timeoutMs: 15000,
+  fontFaces: [],
+  timeoutMs: 20000,
+  resourceErrorMode: 'warn',
+  engine: 'dom-canvas-text',
   onProgress: () => undefined
 };
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const XHTML_NS = 'http://www.w3.org/1999/xhtml';
+
 function isElement(value: unknown): value is HTMLElement {
   return value instanceof HTMLElement;
+}
+
+function isHtmlSource(value: unknown): value is HtmlToPdfHtmlSource {
+  return typeof value === 'object' && value !== null && (value as HtmlToPdfHtmlSource).type === 'html';
+}
+
+function isMarkdownSource(value: unknown): value is HtmlToPdfMarkdownSource {
+  return typeof value === 'object' && value !== null && (value as HtmlToPdfMarkdownSource).type === 'markdown';
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -140,11 +285,12 @@ function deepMerge<T extends Record<string, unknown>>(target: T, ...sources: Arr
 
   for (const source of sources) {
     if (!source) continue;
-
     for (const [key, value] of Object.entries(source)) {
       const current = output[key];
       if (isPlainObject(current) && isPlainObject(value)) {
         output[key] = deepMerge(current, value);
+      } else if (Array.isArray(value)) {
+        output[key] = [...value];
       } else if (value !== undefined) {
         output[key] = value;
       }
@@ -154,42 +300,36 @@ function deepMerge<T extends Record<string, unknown>>(target: T, ...sources: Arr
   return output as T;
 }
 
-function mmToPt(mm: number): number {
-  return (mm * 72) / 25.4;
+function normalizeHeaderFooter(value?: string | HtmlToPdfHeaderFooter): HtmlToPdfHeaderFooter | undefined {
+  if (!value) return undefined;
+  if (typeof value === 'string') {
+    return { text: value, position: 'center', fontSizePx: 10, color: '#4b5563' };
+  }
+  return {
+    position: 'center',
+    fontSizePx: 10,
+    color: '#4b5563',
+    ...value
+  };
 }
 
-function escapeHtml(value: unknown): string {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function normalizeOptions(options?: HtmlToPdfProOptions): ResolvedHtmlToPdfProOptions {
+  const merged = deepMerge(DEFAULT_OPTIONS as unknown as Record<string, unknown>, options as Record<string, unknown> | undefined) as unknown as ResolvedHtmlToPdfProOptions;
+  merged.page = normalizePage(options?.page ?? merged.page);
+  merged.header = normalizeHeaderFooter(options?.header ?? merged.header);
+  merged.footer = normalizeHeaderFooter(options?.footer ?? merged.footer);
+  merged.dpi = clampNumber(merged.dpi, 96, 360, DEFAULT_OPTIONS.dpi);
+  merged.imageQuality = clampNumber(merged.imageQuality, 0.3, 1, DEFAULT_OPTIONS.imageQuality);
+  merged.bleedPx = clampNumber(merged.bleedPx, 0, 120, DEFAULT_OPTIONS.bleedPx);
+  merged.fontFaces = Array.isArray(merged.fontFaces) ? merged.fontFaces : [];
+  merged.extraCss = merged.extraCss ?? '';
+  return merged;
 }
 
-function escapeAttr(value: unknown): string {
-  return escapeHtml(value).replace(/`/g, '&#096;');
-}
-
-function nextFrame(win: Window): Promise<void> {
-  return new Promise((resolve) => {
-    win.requestAnimationFrame(() => {
-      win.requestAnimationFrame(() => resolve());
-    });
-  });
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${ms}ms`));
-    }, ms);
-  });
-
-  return Promise.race([promise, timeout]).finally(() => {
-    if (timer) clearTimeout(timer);
-  });
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
 }
 
 function normalizePage(page?: HtmlToPdfPageOptions): ResolvedHtmlToPdfProOptions['page'] {
@@ -200,6 +340,11 @@ function normalizePage(page?: HtmlToPdfPageOptions): ResolvedHtmlToPdfProOptions
   if (size) {
     normalized.widthMm = size[0];
     normalized.heightMm = size[1];
+  }
+
+  if (!normalized.widthMm || !normalized.heightMm) {
+    normalized.widthMm = DEFAULT_OPTIONS.page.widthMm;
+    normalized.heightMm = DEFAULT_OPTIONS.page.heightMm;
   }
 
   if (normalized.orientation === 'landscape') {
@@ -217,390 +362,1405 @@ function normalizePage(page?: HtmlToPdfPageOptions): ResolvedHtmlToPdfProOptions
   return normalized;
 }
 
-function getTarget(source: HtmlToPdfSource): HTMLElement {
-  if (typeof source === 'string') {
-    const selected = document.querySelector<HTMLElement>(source);
-    if (!selected) throw new Error(`Cannot find source element: ${source}`);
-    return selected;
-  }
-
-  if (!isElement(source)) {
-    throw new TypeError('source must be a selector string or an HTMLElement');
-  }
-
-  return source;
+function mmToPx(mm: number): number {
+  return (mm * 96) / 25.4;
 }
 
-function cloneNodeWithState(source: HTMLElement): HTMLElement {
-  const clone = source.cloneNode(true) as HTMLElement;
+function mmToPt(mm: number): number {
+  return (mm * 72) / 25.4;
+}
 
-  const sourceFields = source.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select');
-  const cloneFields = clone.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select');
+function pxToPt(px: number, pageWidthPx: number, pageWidthPt: number): number {
+  return (px / pageWidthPx) * pageWidthPt;
+}
 
-  sourceFields.forEach((field, index) => {
-    const cloned = cloneFields[index];
-    if (!cloned) return;
+function parseCssLengthToPx(raw: string): number {
+  const value = raw.trim().toLowerCase();
+  const n = Number.parseFloat(value);
+  if (!Number.isFinite(n)) return 0;
+  if (value.endsWith('mm')) return mmToPx(n);
+  if (value.endsWith('cm')) return mmToPx(n * 10);
+  if (value.endsWith('in')) return n * 96;
+  if (value.endsWith('pt')) return (n * 96) / 72;
+  if (value.endsWith('pc')) return n * 16;
+  return n;
+}
 
-    if (field instanceof HTMLTextAreaElement && cloned instanceof HTMLTextAreaElement) {
-      cloned.value = field.value;
-      cloned.textContent = field.value;
-      return;
+function parseMargin(value: string): MarginPx {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  const values = parts.length ? parts.map(parseCssLengthToPx) : [0];
+  const [top, right = top, bottom = top, left = right] = values;
+  return { top, right, bottom, left };
+}
+
+function createPageMetrics(options: ResolvedHtmlToPdfProOptions): PageMetrics {
+  const widthMm = options.page.widthMm;
+  const heightMm = options.page.heightMm;
+  const widthPx = mmToPx(widthMm);
+  const heightPx = mmToPx(heightMm);
+  const margin = parseMargin(options.margin);
+
+  return {
+    widthMm,
+    heightMm,
+    widthPx,
+    heightPx,
+    widthPt: mmToPt(widthMm),
+    heightPt: mmToPt(heightMm),
+    contentWidthPx: Math.max(1, widthPx - margin.left - margin.right),
+    contentHeightPx: Math.max(1, heightPx - margin.top - margin.bottom),
+    margin
+  };
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeCssString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function cssTextFromDeclaration(style: CSSStyleDeclaration): string {
+  const declarations: string[] = [];
+  for (let i = 0; i < style.length; i += 1) {
+    const prop = style.item(i);
+    declarations.push(`${prop}:${style.getPropertyValue(prop)}${style.getPropertyPriority(prop) ? ' !important' : ''};`);
+  }
+  return declarations.join('');
+}
+
+function nextFrame(win: Window = window): Promise<void> {
+  return new Promise((resolve) => {
+    win.requestAnimationFrame(() => win.requestAnimationFrame(() => resolve()));
+  });
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+function dataUrlToBytes(dataUrl: string): { mime: string; bytes: Uint8Array } {
+  const match = /^data:([^;,]+)(;base64)?,(.*)$/i.exec(dataUrl);
+  if (!match) throw new Error('Invalid data URL.');
+  const mime = match[1];
+  const isBase64 = Boolean(match[2]);
+  const payload = match[3];
+  const binary = isBase64 ? atob(payload) : decodeURIComponent(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i) & 0xff;
+  return { mime, bytes };
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function fetchAsDataUrl(url: string, baseUrl?: string): Promise<string> {
+  const absolute = new URL(url, baseUrl ?? document.baseURI).toString();
+  const response = await fetch(absolute, { credentials: 'same-origin' });
+  if (!response.ok) throw new Error(`Failed to fetch resource: ${absolute}`);
+  return blobToDataUrl(await response.blob());
+}
+
+function handleResourceError(error: unknown, options: ResolvedHtmlToPdfProOptions): void {
+  if (options.resourceErrorMode === 'throw') {
+    throw error instanceof Error ? error : new Error(String(error));
+  }
+  if (options.resourceErrorMode === 'warn') {
+    console.warn('[HtmlToPdfPro] Resource inline failed:', error);
+  }
+}
+
+function collectTextNodes(root: Node): Text[] {
+  const nodes: Text[] = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      const parent = node.parentElement;
+      if (!parent) return NodeFilter.FILTER_REJECT;
+      const computed = window.getComputedStyle(parent);
+      if (computed.display === 'none' || computed.visibility === 'hidden' || computed.opacity === '0') {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
     }
+  });
 
-    if (field instanceof HTMLSelectElement && cloned instanceof HTMLSelectElement) {
-      cloned.value = field.value;
-      Array.from(cloned.options).forEach((option) => {
-        option.selected = option.value === field.value;
-      });
-      return;
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
+  return nodes;
+}
+
+function segmentText(value: string): string[] {
+  const Segmenter = (Intl as unknown as { Segmenter?: new (locale?: string, options?: { granularity: 'grapheme' }) => { segment: (input: string) => Iterable<{ segment: string }> } }).Segmenter;
+  if (Segmenter) {
+    return Array.from(new Segmenter(undefined, { granularity: 'grapheme' }).segment(value), (part) => part.segment);
+  }
+  return Array.from(value);
+}
+
+function isRenderableWhitespace(value: string): boolean {
+  return /\s/.test(value);
+}
+
+function safeFileName(filename: string): string {
+  return filename.trim() || 'document.pdf';
+}
+
+function pdfNumber(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  return Number(value.toFixed(3)).toString();
+}
+
+function escapePdfLiteral(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)').replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+}
+
+function utf16BeHex(value: string): string {
+  const units: number[] = [0xfe, 0xff];
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    units.push((code >> 8) & 0xff, code & 0xff);
+  }
+  return units.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+}
+
+function utf16BeHexWithoutBom(value: string): string {
+  const units: number[] = [];
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    units.push((code >> 8) & 0xff, code & 0xff);
+  }
+  return units.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+}
+
+function escapeHtmlTextToInlineMarkdown(value: string): string {
+  return escapeHtml(value)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+}
+
+function markdownToHtml(markdown: string): string {
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+  const html: string[] = [];
+  let paragraph: string[] = [];
+  let inList = false;
+  let inCode = false;
+  let code: string[] = [];
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    html.push(`<p>${escapeHtmlTextToInlineMarkdown(paragraph.join(' '))}</p>`);
+    paragraph = [];
+  };
+  const closeList = () => {
+    if (inList) {
+      html.push('</ul>');
+      inList = false;
     }
+  };
 
-    if (field instanceof HTMLInputElement && cloned instanceof HTMLInputElement) {
-      if (field.type === 'checkbox' || field.type === 'radio') {
-        cloned.checked = field.checked;
-        if (field.checked) cloned.setAttribute('checked', 'checked');
-        else cloned.removeAttribute('checked');
+  for (const line of lines) {
+    if (/^```/.test(line.trim())) {
+      if (inCode) {
+        html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+        code = [];
+        inCode = false;
       } else {
-        cloned.value = field.value;
-        cloned.setAttribute('value', field.value);
+        flushParagraph();
+        closeList();
+        inCode = true;
+      }
+      continue;
+    }
+
+    if (inCode) {
+      code.push(line);
+      continue;
+    }
+
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushParagraph();
+      closeList();
+      continue;
+    }
+
+    const heading = /^(#{1,6})\s+(.+)$/.exec(trimmed);
+    if (heading) {
+      flushParagraph();
+      closeList();
+      const level = heading[1].length;
+      html.push(`<h${level}>${escapeHtmlTextToInlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const item = /^[-*+]\s+(.+)$/.exec(trimmed);
+    if (item) {
+      flushParagraph();
+      if (!inList) {
+        html.push('<ul>');
+        inList = true;
+      }
+      html.push(`<li>${escapeHtmlTextToInlineMarkdown(item[1])}</li>`);
+      continue;
+    }
+
+    if (trimmed.startsWith('>')) {
+      flushParagraph();
+      closeList();
+      html.push(`<blockquote>${escapeHtmlTextToInlineMarkdown(trimmed.replace(/^>\s?/, ''))}</blockquote>`);
+      continue;
+    }
+
+    paragraph.push(trimmed);
+  }
+
+  flushParagraph();
+  closeList();
+  if (inCode) html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+  return html.join('\n');
+}
+
+function createElementFromHtml(html: string): HTMLElement {
+  const container = document.createElement('div');
+  container.className = 'html-to-pdf-pro-html-source';
+  container.innerHTML = html;
+  return container;
+}
+
+function getSourceElement(source: HtmlToPdfSource): HTMLElement {
+  if (isElement(source)) return source;
+  if (isHtmlSource(source)) return createElementFromHtml(source.html);
+  if (isMarkdownSource(source)) return createElementFromHtml(markdownToHtml(source.markdown));
+
+  const trimmed = source.trim();
+  if (trimmed.startsWith('<')) return createElementFromHtml(trimmed);
+
+  const target = document.querySelector<HTMLElement>(source);
+  if (!target) throw new Error(`Unable to find element for selector: ${source}`);
+  return target;
+}
+
+function syncElementState(source: Element, clone: Element): void {
+  if (source instanceof HTMLInputElement && clone instanceof HTMLInputElement) {
+    clone.value = source.value;
+    clone.checked = source.checked;
+    if (source.checked) clone.setAttribute('checked', '');
+    else clone.removeAttribute('checked');
+    clone.setAttribute('value', source.value);
+  } else if (source instanceof HTMLTextAreaElement && clone instanceof HTMLTextAreaElement) {
+    clone.value = source.value;
+    clone.textContent = source.value;
+  } else if (source instanceof HTMLSelectElement && clone instanceof HTMLSelectElement) {
+    clone.value = source.value;
+    Array.from(clone.options).forEach((option, index) => {
+      option.selected = source.options[index]?.selected ?? false;
+      if (option.selected) option.setAttribute('selected', '');
+      else option.removeAttribute('selected');
+    });
+  } else if (source instanceof HTMLCanvasElement && clone instanceof HTMLCanvasElement) {
+    try {
+      clone.width = source.width;
+      clone.height = source.height;
+      const context = clone.getContext('2d');
+      if (context) context.drawImage(source, 0, 0);
+    } catch {
+      // Canvas can be tainted. Keep the blank clone rather than failing the whole export.
+    }
+  }
+
+  const sourceChildren = Array.from(source.children);
+  const cloneChildren = Array.from(clone.children);
+  for (let i = 0; i < sourceChildren.length; i += 1) {
+    const sourceChild = sourceChildren[i];
+    const cloneChild = cloneChildren[i];
+    if (sourceChild && cloneChild) syncElementState(sourceChild, cloneChild);
+  }
+}
+
+function sanitizeClone(root: HTMLElement): void {
+  root.querySelectorAll('script,iframe,object,embed').forEach((node) => node.remove());
+  root.querySelectorAll<HTMLElement>('*').forEach((el) => {
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      const value = attr.value.trim().toLowerCase();
+      if (name.startsWith('on')) el.removeAttribute(attr.name);
+      if ((name === 'src' || name === 'href' || name === 'xlink:href') && value.startsWith('javascript:')) {
+        el.removeAttribute(attr.name);
       }
     }
   });
+}
 
-  const sourceCanvases = source.querySelectorAll<HTMLCanvasElement>('canvas');
-  const cloneCanvases = clone.querySelectorAll<HTMLCanvasElement>('canvas');
+async function collectDocumentCss(options: ResolvedHtmlToPdfProOptions): Promise<string> {
+  if (!options.collectStyles) return createInjectedCss(options);
+  const chunks: string[] = [];
 
-  sourceCanvases.forEach((canvas, index) => {
-    const clonedCanvas = cloneCanvases[index];
-    if (!clonedCanvas || !clonedCanvas.parentNode) return;
+  for (const styleEl of Array.from(document.querySelectorAll<HTMLStyleElement>('style'))) {
+    if (styleEl.textContent?.trim()) chunks.push(styleEl.textContent);
+  }
 
+  for (const sheet of Array.from(document.styleSheets)) {
     try {
-      const img = document.createElement('img');
-      img.src = canvas.toDataURL('image/png');
-      img.width = canvas.width;
-      img.height = canvas.height;
-      img.style.cssText = clonedCanvas.getAttribute('style') || '';
-      img.className = clonedCanvas.className;
-      clonedCanvas.parentNode.replaceChild(img, clonedCanvas);
+      const rules = Array.from(sheet.cssRules ?? []);
+      if (rules.length) chunks.push(rules.map((rule) => rule.cssText).join('\n'));
     } catch {
-      // A tainted canvas cannot be serialized. Keep the cloned canvas as-is.
+      const owner = sheet.ownerNode;
+      if (options.includeExternalStylesheets && owner instanceof HTMLLinkElement && owner.href) {
+        try {
+          const response = await fetch(owner.href, { credentials: 'same-origin' });
+          if (response.ok) chunks.push(await response.text());
+        } catch (error) {
+          handleResourceError(error, options);
+        }
+      }
     }
-  });
+  }
 
-  return clone;
+  chunks.push(createInjectedCss(options));
+  return dedupeCss(chunks.join('\n'));
 }
 
-function collectDocumentStyles(): string {
-  const result: string[] = [];
-  const nodes = document.querySelectorAll<HTMLStyleElement | HTMLLinkElement>('style, link[rel~="stylesheet"]');
-
-  nodes.forEach((node) => {
-    if (node instanceof HTMLStyleElement) {
-      result.push(node.outerHTML);
-      return;
-    }
-
-    const href = node.getAttribute('href');
-    if (!href) return;
-
-    const absoluteHref = new URL(href, document.baseURI).href;
-    const media = node.getAttribute('media');
-    const crossOrigin = node.getAttribute('crossorigin');
-
-    result.push(
-      `<link rel="stylesheet" href="${escapeAttr(absoluteHref)}"` +
-        (media ? ` media="${escapeAttr(media)}"` : '') +
-        (crossOrigin ? ` crossorigin="${escapeAttr(crossOrigin)}"` : '') +
-        '>'
-    );
-  });
-
-  return result.join('\n');
+function dedupeCss(css: string): string {
+  const seen = new Set<string>();
+  const blocks = css.split(/\n(?=@font-face|@page|\.|#|\w|\*)/g);
+  const output: string[] = [];
+  for (const block of blocks) {
+    const normalized = block.trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    output.push(block);
+  }
+  return output.join('\n');
 }
 
-function basePagedCss(options: ResolvedHtmlToPdfProOptions): string {
-  const page = options.page;
+function createInjectedCss(options: ResolvedHtmlToPdfProOptions): string {
+  const fontCss = options.fontFaces
+    .map((font) => {
+      const parts = [
+        `font-family:"${escapeCssString(font.fontFamily)}"`,
+        `src:${font.src}`,
+        font.fontWeight !== undefined ? `font-weight:${font.fontWeight}` : '',
+        font.fontStyle ? `font-style:${font.fontStyle}` : '',
+        font.fontDisplay ? `font-display:${font.fontDisplay}` : '',
+        font.unicodeRange ? `unicode-range:${font.unicodeRange}` : ''
+      ].filter(Boolean);
+      return `@font-face{${parts.join(';')}}`;
+    })
+    .join('\n');
+
+  const headerFooterCss = `
+    .html-to-pdf-pro-page { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .html-to-pdf-pro-page * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .html-to-pdf-pro-stage { contain: layout paint style; }
+    .pdf-page-break { break-before: page; page-break-before: always; }
+    .pdf-avoid-break, .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+    table { border-collapse: collapse; }
+    thead { display: table-header-group; }
+    tr, img, svg, canvas, figure, pre, blockquote { break-inside: avoid; page-break-inside: avoid; }
+  `;
+
+  return [fontCss, headerFooterCss, options.extraCss].filter(Boolean).join('\n');
+}
+
+async function inlineAssets(root: HTMLElement, options: ResolvedHtmlToPdfProOptions): Promise<void> {
+  if (options.inlineImages) {
+    const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
+    for (const img of images) {
+      const src = img.getAttribute('src');
+      if (!src || /^data:/i.test(src) || /^blob:/i.test(src)) continue;
+      try {
+        img.setAttribute('src', await fetchAsDataUrl(src));
+        img.removeAttribute('srcset');
+      } catch (error) {
+        handleResourceError(error, options);
+      }
+    }
+
+    const svgImages = Array.from(root.querySelectorAll<SVGImageElement>('svg image'));
+    for (const image of svgImages) {
+      const href = image.getAttribute('href') || image.getAttribute('xlink:href');
+      if (!href || /^data:/i.test(href) || /^blob:/i.test(href)) continue;
+      try {
+        image.setAttribute('href', await fetchAsDataUrl(href));
+        image.removeAttribute('xlink:href');
+      } catch (error) {
+        handleResourceError(error, options);
+      }
+    }
+  }
+
+  if (options.inlineCanvas) {
+    root.querySelectorAll('canvas').forEach((canvas) => {
+      if (!(canvas instanceof HTMLCanvasElement)) return;
+      try {
+        const img = document.createElement('img');
+        img.src = canvas.toDataURL('image/png');
+        img.width = canvas.width;
+        img.height = canvas.height;
+        img.style.cssText = canvas.getAttribute('style') ?? '';
+        img.className = canvas.className;
+        canvas.replaceWith(img);
+      } catch (error) {
+        handleResourceError(error, options);
+      }
+    });
+  }
+
+  if (options.inlineCssResources) {
+    await inlineCssUrlResources(root, options);
+  }
+}
+
+async function inlineCssUrlResources(root: HTMLElement, options: ResolvedHtmlToPdfProOptions): Promise<void> {
+  const elements = Array.from(root.querySelectorAll<HTMLElement>('*'));
+  for (const el of elements) {
+    const style = el.getAttribute('style');
+    if (!style || !/url\(/i.test(style)) continue;
+    const replaced = await replaceCssUrls(style, options);
+    el.setAttribute('style', replaced);
+  }
+}
+
+async function replaceCssUrls(css: string, options: ResolvedHtmlToPdfProOptions): Promise<string> {
+  const matches = Array.from(css.matchAll(/url\((['"]?)([^'")]+)\1\)/gi));
+  let output = css;
+  for (const match of matches) {
+    const url = match[2];
+    if (/^(data:|blob:|#)/i.test(url)) continue;
+    try {
+      const dataUrl = await fetchAsDataUrl(url);
+      output = output.replace(match[0], `url("${dataUrl}")`);
+    } catch (error) {
+      handleResourceError(error, options);
+    }
+  }
+  return output;
+}
+
+function materializePseudoElements(root: HTMLElement): void {
+  const all = Array.from(root.querySelectorAll<HTMLElement>('*'));
+  for (const el of all) {
+    materializePseudo(el, 'before');
+    materializePseudo(el, 'after');
+  }
+}
+
+function materializePseudo(el: HTMLElement, pseudo: 'before' | 'after'): void {
+  const computed = window.getComputedStyle(el, `::${pseudo}`);
+  const content = computed.content;
+  if (!content || content === 'none' || content === 'normal') return;
+  const text = parseCssContent(content);
+  if (!text) return;
+
+  const span = document.createElement('span');
+  span.textContent = text;
+  span.setAttribute('aria-hidden', 'true');
+  span.className = `html-to-pdf-pro-pseudo-${pseudo}`;
+  const css = cssTextFromDeclaration(computed);
+  span.setAttribute('style', css);
+  if (pseudo === 'before') el.prepend(span);
+  else el.append(span);
+}
+
+function parseCssContent(content: string): string {
+  if ((content.startsWith('"') && content.endsWith('"')) || (content.startsWith("'") && content.endsWith("'"))) {
+    return content.slice(1, -1).replace(/\\A/g, '\n').replace(/\\"/g, '"').replace(/\\'/g, "'");
+  }
+  return '';
+}
+
+function elementText(element: Element): string {
+  return (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+async function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Failed to load rendered page image.'));
+    image.src = url;
+  });
+}
+
+function buildSnapshotHtml(sourceCss: string, root: HTMLElement): string {
   return [
-    '<style data-html2pdf-js="base">',
-    `@page { size: ${page.widthMm}mm ${page.heightMm}mm; margin: ${options.margin}; }`,
-    'html, body { margin: 0; padding: 0; background: #fff; }',
-    'body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
-    'img, svg, canvas, video { max-width: 100%; }',
-    '.pdf-avoid-break, .avoid-break, figure, pre, blockquote, .card, .panel { break-inside: avoid; page-break-inside: avoid; }',
-    '.pdf-page-break { break-before: page; page-break-before: always; }',
-    'table { border-collapse: collapse; }',
-    'thead { display: table-header-group; }',
-    'tfoot { display: table-footer-group; }',
-    'tr { break-inside: avoid; page-break-inside: avoid; }',
-    '.pagedjs_pages { display: block !important; }',
-    '.pagedjs_page { background: #fff !important; box-shadow: none !important; margin: 0 auto !important; overflow: hidden !important; }',
-    '.pagedjs_pagebox { box-shadow: none !important; }',
-    '</style>'
+    '<!doctype html>',
+    '<html>',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<style>',
+    sourceCss,
+    '</style>',
+    '</head>',
+    '<body>',
+    root.outerHTML,
+    '</body>',
+    '</html>'
   ].join('\n');
 }
 
-function waitForStylesheets(doc: Document, timeoutMs: number): Promise<void> {
-  const links = Array.from(doc.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet"]'));
-  if (!links.length) return Promise.resolve();
-
-  return Promise.all(
-    links.map((link) => {
-      if (link.sheet) return Promise.resolve();
-
-      return new Promise<void>((resolve) => {
-        const done = () => resolve();
-        link.addEventListener('load', done, { once: true });
-        link.addEventListener('error', done, { once: true });
-        setTimeout(done, timeoutMs || 3000);
-      });
-    })
-  ).then(() => undefined);
-}
-
-function waitForFontsAndImages(win: Window, doc: Document, timeoutMs: number): Promise<void> {
-  const fontPromise = doc.fonts?.ready?.catch(() => undefined) ?? Promise.resolve();
-  const images = Array.from(doc.images || []);
-  const imagePromise = Promise.all(
-    images.map((img) => {
-      if (img.complete && img.naturalWidth !== 0) return Promise.resolve();
-      if (img.decode) return img.decode().catch(() => undefined);
-
-      return new Promise<void>((resolve) => {
-        const done = () => resolve();
-        img.addEventListener('load', done, { once: true });
-        img.addEventListener('error', done, { once: true });
-        setTimeout(done, timeoutMs || 3000);
-      });
-    })
-  );
-
-  return Promise.all([fontPromise, imagePromise]).then(() => nextFrame(win));
-}
-
-function loadScript(doc: Document, src: string, timeoutMs: number): Promise<void> {
-  return withTimeout(
-    new Promise<void>((resolve, reject) => {
-      const script = doc.createElement('script');
-      script.src = src;
-      script.async = false;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-      doc.head.appendChild(script);
-    }),
-    timeoutMs,
-    `Loading ${src}`
-  );
-}
-
-function createIframe(options: ResolvedHtmlToPdfProOptions): HTMLIFrameElement {
-  const iframe = document.createElement('iframe');
-  iframe.title = 'HtmlToPdfPro render frame';
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.style.position = 'fixed';
-  iframe.style.left = '-100000px';
-  iframe.style.top = '0';
-  iframe.style.width = `${Math.ceil(options.page.widthMm + 30)}mm`;
-  iframe.style.height = `${Math.ceil(options.page.heightMm + 30)}mm`;
-  iframe.style.border = '0';
-  iframe.style.background = '#fff';
-  iframe.style.zIndex = '-1';
-  document.body.appendChild(iframe);
-  return iframe;
-}
-
-function pageOrientation(options: ResolvedHtmlToPdfProOptions): HtmlToPdfOrientation {
-  return options.page.widthMm > options.page.heightMm ? 'landscape' : 'portrait';
-}
-
-/**
- * Professional browser-side HTML to PDF exporter.
- *
- * Pipeline:
- * 1. Clone the target DOM and current document styles into an isolated iframe.
- * 2. Use Paged.js to apply CSS Paged Media rules and create page DOM.
- * 3. Rasterize each page with html2canvas.
- * 4. Pack the pages into a jsPDF document.
- */
 export class HtmlToPdfPro {
-  private readonly defaultOptions: ResolvedHtmlToPdfProOptions;
+  private readonly options: ResolvedHtmlToPdfProOptions;
 
-  constructor(defaultOptions: HtmlToPdfProOptions = {}) {
-    this.defaultOptions = this.resolveOptions(defaultOptions);
+  constructor(options: HtmlToPdfProOptions = {}) {
+    this.options = normalizeOptions(options);
   }
 
-  public resolveOptions(options: HtmlToPdfProOptions = {}): ResolvedHtmlToPdfProOptions {
-    const merged = deepMerge(
-      DEFAULT_OPTIONS as unknown as Record<string, unknown>,
-      this.defaultOptions as unknown as Record<string, unknown>,
-      options as Record<string, unknown>
-    ) as unknown as ResolvedHtmlToPdfProOptions;
-
-    merged.page = normalizePage(merged.page);
-    merged.scale = merged.scale || Math.min(3, Math.max(2, window.devicePixelRatio || 2));
-    merged.onProgress = typeof merged.onProgress === 'function' ? merged.onProgress : () => undefined;
-    return merged;
-  }
-
-  public async createPagedFrame(source: HtmlToPdfSource, options: HtmlToPdfProOptions = {}): Promise<PagedFrameResult> {
-    const opt = this.resolveOptions(options);
-    const target = getTarget(source);
-    const clone = cloneNodeWithState(target);
-    const iframe = createIframe(opt);
-    const win = iframe.contentWindow as PagedWindow | null;
-    const doc = iframe.contentDocument;
-
-    if (!win || !doc) {
-      throw new Error('Cannot access render iframe document.');
+  async toPdf(source: HtmlToPdfSource, overrideOptions: HtmlToPdfProOptions = {}): Promise<Uint8Array> {
+    const options = normalizeOptions({ ...this.options, ...overrideOptions });
+    if (options.engine !== 'dom-canvas-text') {
+      throw new Error(`Unsupported engine: ${options.engine}`);
     }
 
-    this.emit(opt, 'clone', { message: 'Clone DOM and collect styles' });
-
-    doc.open();
-    doc.write(
-      [
-        '<!doctype html>',
-        '<html>',
-        '<head>',
-        '<meta charset="utf-8">',
-        '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        `<base href="${escapeAttr(document.baseURI)}">`,
-        '<script>window.PagedConfig = { auto: false };<\/script>',
-        basePagedCss(opt),
-        collectDocumentStyles(),
-        opt.extraCss ? `<style data-html2pdf-js="extra">${opt.extraCss}</style>` : '',
-        '</head>',
-        '<body><main id="html2pdf-js-root"></main></body>',
-        '</html>'
-      ].join('\n')
-    );
-    doc.close();
-
-    doc.getElementById('html2pdf-js-root')?.appendChild(doc.importNode(clone, true));
-
-    this.emit(opt, 'assets', { message: 'Wait for CSS, fonts and images' });
-    await waitForStylesheets(doc, Math.min(5000, opt.timeoutMs));
-    await waitForFontsAndImages(win, doc, Math.min(5000, opt.timeoutMs));
-
-    this.emit(opt, 'pagedjs', { message: 'Load Paged.js and paginate' });
-    if (!win.PagedPolyfill) {
-      await loadScript(doc, opt.pagedScriptUrl, opt.timeoutMs);
-    }
-
-    if (!win.PagedPolyfill || typeof win.PagedPolyfill.preview !== 'function') {
-      throw new Error('Paged.js did not expose window.PagedPolyfill.preview().');
-    }
-
-    const flow = await withTimeout(Promise.resolve(win.PagedPolyfill.preview()), opt.timeoutMs, 'Paged.js preview');
-    await nextFrame(win);
-
-    const pages = Array.from(doc.querySelectorAll<HTMLElement>('.pagedjs_page'));
-    if (!pages.length) {
-      throw new Error('Paged.js produced no pages. Check your source element and @page CSS.');
-    }
-
-    this.emit(opt, 'paginated', {
-      message: 'Pagination complete',
-      totalPages: pages.length,
-      flow
-    });
-
-    return { iframe, window: win, document: doc, flow, pages, options: opt };
-  }
-
-  public async toPdf(source: HtmlToPdfSource, options: HtmlToPdfProOptions = {}): Promise<jsPDF> {
-    const opt = this.resolveOptions(options);
-    const frameResult = await this.createPagedFrame(source, opt);
-    const { iframe, document: doc, window: frameWindow } = frameResult;
-    const pages = Array.from(doc.querySelectorAll<HTMLElement>('.pagedjs_page'));
-    const pageWidthPt = mmToPt(opt.page.widthMm);
-    const pageHeightPt = mmToPt(opt.page.heightMm);
-    const orientation = pageOrientation(opt);
-
-    const pdf = new jsPDF({
-      orientation,
-      unit: 'pt',
-      format: [pageWidthPt, pageHeightPt],
-      compress: true,
-      putOnlyUsedFonts: true
-    });
-
-    this.emit(opt, 'render-start', { totalPages: pages.length });
+    options.onProgress({ phase: 'clone', message: 'Cloning source DOM.' });
+    const layout = await this.createLayout(source, options);
 
     try {
-      for (const [index, page] of pages.entries()) {
-        page.scrollIntoView();
-        await nextFrame(frameWindow);
+      options.onProgress({ phase: 'paginate', message: 'Computing page slices.' });
+      const pages = paginate(layout, options);
+      options.onProgress({ phase: 'render-start', message: 'Rendering pages.', totalPages: pages.length });
 
-        const rect = page.getBoundingClientRect();
-        const canvas = await html2canvas(page, {
-          backgroundColor: opt.backgroundColor,
-          scale: opt.scale,
-          useCORS: opt.useCORS,
-          allowTaint: opt.allowTaint,
-          foreignObjectRendering: opt.foreignObjectRendering,
-          logging: false,
-          windowWidth: Math.ceil(rect.width),
-          windowHeight: Math.ceil(rect.height),
-          scrollX: 0,
-          scrollY: 0
-        });
+      const pageInputs: PdfPageInput[] = [];
+      const allBookmarks: BookmarkItem[] = [];
 
-        const mime = opt.imageType === 'png' ? 'image/png' : 'image/jpeg';
-        const format = opt.imageType === 'png' ? 'PNG' : 'JPEG';
-        const dataUrl = canvas.toDataURL(mime, opt.imageQuality);
-
-        if (index > 0) pdf.addPage([pageWidthPt, pageHeightPt], orientation);
-        pdf.addImage(dataUrl, format, 0, 0, pageWidthPt, pageHeightPt, undefined, 'FAST');
-
-        this.emit(opt, 'render-page', {
-          page: index + 1,
+      for (const page of pages) {
+        options.onProgress({
+          phase: 'render-page',
+          page: page.index + 1,
           totalPages: pages.length,
-          ratio: (index + 1) / pages.length
+          ratio: page.index / Math.max(1, pages.length)
         });
+        const result = await renderPage(layout, page, pages.length, options);
+        const { bytes } = dataUrlToBytes(result.visual.dataUrl);
+        pageInputs.push({
+          imageBytes: bytes,
+          imageMime: 'image/jpeg',
+          imageWidth: result.visual.widthPx,
+          imageHeight: result.visual.heightPx,
+          glyphs: result.glyphs,
+          links: result.links
+        });
+        allBookmarks.push(...result.bookmarks);
       }
 
-      this.emit(opt, 'render-complete', { totalPages: pages.length });
-      return pdf;
+      options.onProgress({ phase: 'pdf', message: 'Assembling PDF.' });
+      return buildPdf(pageInputs, allBookmarks, layout.metrics, options);
     } finally {
-      if (opt.removeContainer && !opt.debug && iframe.parentNode) {
-        iframe.parentNode.removeChild(iframe);
-      }
+      layout.cleanup();
     }
   }
 
-  public async download(source: HtmlToPdfSource, options: HtmlToPdfProOptions = {}): Promise<jsPDF> {
-    const opt = this.resolveOptions(options);
-    const pdf = await this.toPdf(source, opt);
-    pdf.save(opt.filename);
-    this.emit(opt, 'save', { filename: opt.filename });
-    return pdf;
+  async outputBlob(source: HtmlToPdfSource, overrideOptions: HtmlToPdfProOptions = {}): Promise<Blob> {
+    const bytes = await this.toPdf(source, overrideOptions);
+    return new Blob([bytes], { type: 'application/pdf' });
   }
 
-  public async outputBlob(source: HtmlToPdfSource, options: HtmlToPdfProOptions = {}): Promise<Blob> {
-    const pdf = await this.toPdf(source, options);
-    return pdf.output('blob');
+  async download(source: HtmlToPdfSource, overrideOptions: HtmlToPdfProOptions = {}): Promise<void> {
+    const options = normalizeOptions({ ...this.options, ...overrideOptions });
+    const blob = await this.outputBlob(source, options);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = safeFileName(options.filename);
+    anchor.rel = 'noopener';
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+    options.onProgress({ phase: 'save', filename: options.filename, ratio: 1 });
   }
 
-  public async nativePrint(source: HtmlToPdfSource, options: HtmlToPdfProOptions = {}): Promise<PagedFrameResult> {
-    const opt = this.resolveOptions({ debug: true, removeContainer: false, ...options });
-    const frameResult = await this.createPagedFrame(source, opt);
-    const { iframe, window: frameWindow } = frameResult;
+  async fromHtml(html: string, overrideOptions: HtmlToPdfProOptions = {}): Promise<Uint8Array> {
+    return this.toPdf({ type: 'html', html }, overrideOptions);
+  }
 
-    const cleanup = () => {
-      if (opt.removeContainer && !opt.debug && iframe.parentNode) iframe.parentNode.removeChild(iframe);
+  async downloadHtml(html: string, overrideOptions: HtmlToPdfProOptions = {}): Promise<void> {
+    await this.download({ type: 'html', html }, overrideOptions);
+  }
+
+  async fromMarkdown(markdown: string, overrideOptions: HtmlToPdfProOptions = {}): Promise<Uint8Array> {
+    return this.toPdf({ type: 'markdown', markdown }, overrideOptions);
+  }
+
+  async downloadMarkdown(markdown: string, overrideOptions: HtmlToPdfProOptions = {}): Promise<void> {
+    await this.download({ type: 'markdown', markdown }, overrideOptions);
+  }
+
+  async serialize(source: HtmlToPdfSource, overrideOptions: HtmlToPdfProOptions = {}): Promise<string> {
+    const options = normalizeOptions({ ...this.options, ...overrideOptions });
+    const layout = await this.createLayout(source, options);
+    try {
+      return layout.snapshotHtml;
+    } finally {
+      layout.cleanup();
+    }
+  }
+
+  async nativePrint(source: HtmlToPdfSource, overrideOptions: HtmlToPdfProOptions = {}): Promise<void> {
+    const snapshot = await this.serialize(source, overrideOptions);
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+    if (!printWindow) throw new Error('Unable to open print window.');
+    printWindow.document.open();
+    printWindow.document.write(snapshot);
+    printWindow.document.close();
+    await nextFrame(printWindow);
+    printWindow.focus();
+    printWindow.print();
+  }
+
+  private async createLayout(source: HtmlToPdfSource, options: ResolvedHtmlToPdfProOptions): Promise<LayoutContext> {
+    const sourceEl = getSourceElement(source);
+    const sourceRect = sourceEl.getBoundingClientRect();
+    const metrics = createPageMetrics(options);
+    const sourceWidth = Math.max(1, Math.ceil(sourceRect.width || sourceEl.scrollWidth || metrics.contentWidthPx));
+
+    const clone = sourceEl.cloneNode(true) as HTMLElement;
+    syncElementState(sourceEl, clone);
+    if (options.sanitize) sanitizeClone(clone);
+
+    options.onProgress({ phase: 'styles', message: 'Collecting CSS.' });
+    const sourceCss = await collectDocumentCss(options);
+
+    const stage = document.createElement('div');
+    stage.className = 'html-to-pdf-pro-stage';
+    stage.style.cssText = [
+      'position:absolute',
+      'left:-100000px',
+      'top:0',
+      `width:${sourceWidth}px`,
+      'min-height:1px',
+      'overflow:visible',
+      'background:transparent',
+      'z-index:-1',
+      'pointer-events:none'
+    ].join(';');
+
+    const style = document.createElement('style');
+    style.textContent = sourceCss;
+    stage.append(style);
+
+    const root = document.createElement('div');
+    root.className = 'html-to-pdf-pro-layout-root';
+    root.style.cssText = [`width:${sourceWidth}px`, 'position:relative', 'overflow:visible'].join(';');
+    root.append(clone);
+    stage.append(root);
+    document.body.append(stage);
+
+    options.onProgress({ phase: 'assets', message: 'Inlining assets.' });
+    await inlineAssets(root, options);
+    if (options.materializePseudoElements) materializePseudoElements(root);
+
+    options.onProgress({ phase: 'layout', message: 'Measuring layout.' });
+    if (document.fonts?.ready) await withTimeout(document.fonts.ready, options.timeoutMs, 'Font loading');
+    await nextFrame();
+
+    const rootRect = root.getBoundingClientRect();
+    const layoutWidthPx = Math.max(1, Math.ceil(rootRect.width || root.scrollWidth || sourceWidth));
+    const layoutHeightPx = Math.max(1, Math.ceil(rootRect.height || root.scrollHeight));
+    const zoom = options.fitToPage ? Math.min(1, metrics.contentWidthPx / layoutWidthPx) : 1;
+    const scaledWidth = layoutWidthPx * zoom;
+    const xOffsetPx = Math.max(0, (metrics.contentWidthPx - scaledWidth) / 2);
+
+    return {
+      stage,
+      root,
+      sourceCss,
+      metrics,
+      layoutWidthPx,
+      layoutHeightPx,
+      zoom,
+      xOffsetPx,
+      snapshotHtml: buildSnapshotHtml(sourceCss, root),
+      cleanup: () => {
+        stage.remove();
+      }
     };
-
-    frameWindow.addEventListener('afterprint', cleanup, { once: true });
-    frameWindow.focus();
-    frameWindow.print();
-    return frameResult;
-  }
-
-  private emit(options: ResolvedHtmlToPdfProOptions, phase: HtmlToPdfProgressPhase, payload: Omit<HtmlToPdfProgressEvent, 'phase'> = {}): void {
-    options.onProgress({ phase, ...payload });
   }
 }
 
-export function createHtmlToPdfPro(options?: HtmlToPdfProOptions): HtmlToPdfPro {
-  return new HtmlToPdfPro(options);
+function paginate(layout: LayoutContext, options: ResolvedHtmlToPdfProOptions): PageSlice[] {
+  const available = Math.max(1, layout.metrics.contentHeightPx / layout.zoom);
+  const total = layout.layoutHeightPx;
+  const forced = collectForcedBreaks(layout, options);
+  const pages: PageSlice[] = [];
+  let start = 0;
+  let index = 0;
+
+  while (start < total - 1) {
+    let end = Math.min(total, start + available);
+    const nextForced = forced.find((pos) => pos > start + 1 && pos < end - 1);
+    if (nextForced !== undefined) end = nextForced;
+    else if (options.pageBreakMode === 'avoid' && end < total) end = adjustBreakToAvoidElements(layout, start, end, available, options);
+
+    if (end <= start + 1) end = Math.min(total, start + available);
+    pages.push({ index, startY: start, endY: end });
+    start = end;
+    index += 1;
+
+    if (index > 1000) throw new Error('Pagination produced too many pages. Please check source height.');
+  }
+
+  return pages.length ? pages : [{ index: 0, startY: 0, endY: total }];
+}
+
+function collectForcedBreaks(layout: LayoutContext, options: ResolvedHtmlToPdfProOptions): number[] {
+  const breaks = new Set<number>();
+  const rootRect = layout.root.getBoundingClientRect();
+  for (const el of Array.from(layout.root.querySelectorAll<HTMLElement>(options.forceBreakBeforeSelectors))) {
+    const rect = el.getBoundingClientRect();
+    const top = rect.top - rootRect.top;
+    if (top > 1 && top < layout.layoutHeightPx - 1) breaks.add(Math.round(top));
+  }
+  return Array.from(breaks).sort((a, b) => a - b);
+}
+
+function adjustBreakToAvoidElements(
+  layout: LayoutContext,
+  start: number,
+  proposed: number,
+  available: number,
+  options: ResolvedHtmlToPdfProOptions
+): number {
+  const rootRect = layout.root.getBoundingClientRect();
+  const minEnd = start + Math.max(available * 0.35, 80);
+  let candidate = proposed;
+
+  const avoidElements = Array.from(layout.root.querySelectorAll<HTMLElement>(options.avoidBreakSelectors));
+  for (const el of avoidElements) {
+    const rect = el.getBoundingClientRect();
+    const top = rect.top - rootRect.top;
+    const bottom = rect.bottom - rootRect.top;
+    if (top < proposed && bottom > proposed && top > minEnd) {
+      candidate = Math.min(candidate, top);
+    }
+  }
+
+  if (candidate < minEnd) return proposed;
+
+  const blockBoundaries: number[] = [];
+  const blockSelector = 'section,article,header,footer,div,p,table,thead,tbody,tr,ul,ol,li,figure,blockquote,pre,h1,h2,h3,h4,h5,h6';
+  for (const el of Array.from(layout.root.querySelectorAll<HTMLElement>(blockSelector))) {
+    const rect = el.getBoundingClientRect();
+    const bottom = rect.bottom - rootRect.top;
+    if (bottom > minEnd && bottom < candidate) blockBoundaries.push(bottom);
+  }
+
+  if (blockBoundaries.length) {
+    const best = Math.max(...blockBoundaries);
+    if (proposed - best < available * 0.25) return best;
+  }
+
+  return candidate;
+}
+
+async function renderPage(
+  layout: LayoutContext,
+  page: PageSlice,
+  totalPages: number,
+  options: ResolvedHtmlToPdfProOptions
+): Promise<PageRenderResult> {
+  const visual = await renderPageVisual(layout, page, totalPages, options);
+  const glyphs = options.textLayer ? extractPageText(layout, page, totalPages, options) : [];
+  const links = options.linkAnnotations ? extractPageLinks(layout, page) : [];
+  const bookmarks = options.bookmarks ? extractPageBookmarks(layout, page) : [];
+  return { visual, glyphs, links, bookmarks };
+}
+
+async function renderPageVisual(
+  layout: LayoutContext,
+  page: PageSlice,
+  totalPages: number,
+  options: ResolvedHtmlToPdfProOptions
+): Promise<PageVisual> {
+  const metrics = layout.metrics;
+  const outputScale = options.dpi / 96;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.ceil(metrics.widthPx * outputScale));
+  canvas.height = Math.max(1, Math.ceil(metrics.heightPx * outputScale));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas 2D context is not available.');
+  if (options.backgroundColor) {
+    context.fillStyle = options.backgroundColor;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  const svgUrl = createPageSvgUrl(layout, page, totalPages, options);
+  try {
+    const image = await withTimeout(loadImage(svgUrl), options.timeoutMs, 'Page SVG render');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+
+  const mime = 'image/jpeg';
+  return {
+    dataUrl: canvas.toDataURL(mime, options.imageQuality),
+    widthPx: canvas.width,
+    heightPx: canvas.height
+  };
+}
+
+function createPageSvgUrl(
+  layout: LayoutContext,
+  page: PageSlice,
+  totalPages: number,
+  options: ResolvedHtmlToPdfProOptions
+): string {
+  const doc = document.implementation.createHTMLDocument('');
+  const pageEl = doc.createElement('div');
+  pageEl.setAttribute('xmlns', XHTML_NS);
+  pageEl.className = 'html-to-pdf-pro-page';
+  pageEl.setAttribute(
+    'style',
+    [
+      `width:${layout.metrics.widthPx}px`,
+      `height:${layout.metrics.heightPx}px`,
+      `background:${options.backgroundColor ?? 'transparent'}`,
+      'position:relative',
+      'overflow:hidden',
+      'margin:0',
+      'padding:0'
+    ].join(';')
+  );
+
+  const style = doc.createElement('style');
+  style.textContent = layout.sourceCss;
+  pageEl.append(style);
+
+  const viewport = doc.createElement('div');
+  viewport.setAttribute(
+    'style',
+    [
+      'position:absolute',
+      `left:${layout.metrics.margin.left + layout.xOffsetPx}px`,
+      `top:${layout.metrics.margin.top}px`,
+      `width:${layout.metrics.contentWidthPx - layout.xOffsetPx * 2}px`,
+      `height:${layout.metrics.contentHeightPx}px`,
+      'overflow:hidden',
+      'margin:0',
+      'padding:0'
+    ].join(';')
+  );
+
+  const content = doc.createElement('div');
+  content.setAttribute(
+    'style',
+    [
+      'position:absolute',
+      'left:0',
+      `top:${-page.startY * layout.zoom}px`,
+      `width:${layout.layoutWidthPx}px`,
+      `transform:scale(${layout.zoom})`,
+      'transform-origin:0 0',
+      'margin:0',
+      'padding:0'
+    ].join(';')
+  );
+
+  content.append(doc.importNode(layout.root.cloneNode(true), true));
+  viewport.append(content);
+  pageEl.append(viewport);
+  appendHeaderFooter(pageEl, layout, page.index + 1, totalPages, options);
+
+  const serialized = new XMLSerializer().serializeToString(pageEl);
+  const svg = [
+    `<svg xmlns="${SVG_NS}" width="${layout.metrics.widthPx}" height="${layout.metrics.heightPx}" viewBox="0 0 ${layout.metrics.widthPx} ${layout.metrics.heightPx}">`,
+    `<foreignObject x="0" y="0" width="100%" height="100%">`,
+    serialized,
+    '</foreignObject>',
+    '</svg>'
+  ].join('');
+
+  return URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+}
+
+function appendHeaderFooter(
+  pageEl: HTMLElement,
+  layout: LayoutContext,
+  pageNumber: number,
+  totalPages: number,
+  options: ResolvedHtmlToPdfProOptions
+): void {
+  if (options.header) appendHeaderFooterLine(pageEl, layout, options.header, pageNumber, totalPages, 'header');
+  if (options.footer) appendHeaderFooterLine(pageEl, layout, options.footer, pageNumber, totalPages, 'footer');
+}
+
+function appendHeaderFooterLine(
+  pageEl: HTMLElement,
+  layout: LayoutContext,
+  config: HtmlToPdfHeaderFooter,
+  pageNumber: number,
+  totalPages: number,
+  slot: 'header' | 'footer'
+): void {
+  const doc = pageEl.ownerDocument;
+  const text = formatPageText(config.text, pageNumber, totalPages);
+  const fontSize = config.fontSizePx ?? 10;
+  const offset = config.offsetPx ?? 0;
+  const div = doc.createElement('div');
+  const horizontal = config.position === 'left' ? `left:${layout.metrics.margin.left}px;text-align:left` : config.position === 'right' ? `right:${layout.metrics.margin.right}px;text-align:right` : `left:${layout.metrics.margin.left}px;right:${layout.metrics.margin.right}px;text-align:center`;
+  const vertical = slot === 'header'
+    ? `top:${Math.max(4, layout.metrics.margin.top / 2 - fontSize / 2 + offset)}px`
+    : `bottom:${Math.max(4, layout.metrics.margin.bottom / 2 - fontSize / 2 + offset)}px`;
+  div.textContent = text;
+  div.setAttribute(
+    'style',
+    [
+      'position:absolute',
+      horizontal,
+      vertical,
+      `font-size:${fontSize}px`,
+      `line-height:${fontSize * 1.25}px`,
+      `color:${config.color ?? '#4b5563'}`,
+      'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'white-space:nowrap',
+      'overflow:hidden',
+      'text-overflow:ellipsis'
+    ].join(';')
+  );
+  pageEl.append(div);
+}
+
+function formatPageText(text: string, pageNumber: number, totalPages: number): string {
+  return text.replace(/\{page\}/g, String(pageNumber)).replace(/\{pages\}/g, String(totalPages));
+}
+
+function extractPageText(
+  layout: LayoutContext,
+  page: PageSlice,
+  totalPages: number,
+  options: ResolvedHtmlToPdfProOptions
+): TextGlyph[] {
+  const rootRect = layout.root.getBoundingClientRect();
+  const glyphs: TextGlyph[] = [];
+  const range = document.createRange();
+
+  for (const node of collectTextNodes(layout.root)) {
+    const parent = node.parentElement;
+    if (!parent) continue;
+    const computed = window.getComputedStyle(parent);
+    const fontSize = Math.max(1, parseCssLengthToPx(computed.fontSize || '12px') * layout.zoom);
+    const segments = segmentText(node.nodeValue ?? '');
+    let offset = 0;
+    let lastX = 0;
+    let lastY = 0;
+
+    for (const segment of segments) {
+      const start = offset;
+      const end = offset + segment.length;
+      offset = end;
+      try {
+        range.setStart(node, start);
+        range.setEnd(node, end);
+      } catch {
+        continue;
+      }
+      const rect = Array.from(range.getClientRects()).find((r) => r.width > 0 || r.height > 0);
+      if (!rect) {
+        if (isRenderableWhitespace(segment) && glyphs.length) {
+          glyphs.push({ text: segment, pageIndex: page.index, xPx: lastX, yPx: lastY, fontSizePx: fontSize });
+        }
+        continue;
+      }
+
+      const topInSource = rect.top - rootRect.top;
+      if (topInSource < page.startY - 1 || topInSource > page.endY + 1) continue;
+      const xPx = layout.metrics.margin.left + layout.xOffsetPx + (rect.left - rootRect.left) * layout.zoom;
+      const yTop = layout.metrics.margin.top + (topInSource - page.startY) * layout.zoom;
+      const yPx = yTop + rect.height * layout.zoom * 0.78;
+      lastX = xPx + rect.width * layout.zoom;
+      lastY = yPx;
+      glyphs.push({ text: segment, pageIndex: page.index, xPx, yPx, fontSizePx: fontSize });
+    }
+  }
+
+  range.detach();
+  appendHeaderFooterGlyphs(glyphs, layout, page.index + 1, totalPages, options);
+  return glyphs;
+}
+
+function appendHeaderFooterGlyphs(
+  glyphs: TextGlyph[],
+  layout: LayoutContext,
+  pageNumber: number,
+  totalPages: number,
+  options: ResolvedHtmlToPdfProOptions
+): void {
+  if (options.header) appendLineGlyphs(glyphs, layout, options.header, pageNumber, totalPages, 'header');
+  if (options.footer) appendLineGlyphs(glyphs, layout, options.footer, pageNumber, totalPages, 'footer');
+}
+
+function appendLineGlyphs(
+  glyphs: TextGlyph[],
+  layout: LayoutContext,
+  config: HtmlToPdfHeaderFooter,
+  pageNumber: number,
+  totalPages: number,
+  slot: 'header' | 'footer'
+): void {
+  const text = formatPageText(config.text, pageNumber, totalPages);
+  const size = config.fontSizePx ?? 10;
+  const estimatedWidth = text.length * size * 0.52;
+  let x = layout.metrics.margin.left;
+  if (config.position === 'center') x = (layout.metrics.widthPx - estimatedWidth) / 2;
+  if (config.position === 'right') x = layout.metrics.widthPx - layout.metrics.margin.right - estimatedWidth;
+  const y = slot === 'header'
+    ? Math.max(4, layout.metrics.margin.top / 2 + size / 2)
+    : layout.metrics.heightPx - Math.max(4, layout.metrics.margin.bottom / 2 - size / 2);
+  let currentX = x;
+  for (const char of segmentText(text)) {
+    glyphs.push({ text: char, pageIndex: pageNumber - 1, xPx: currentX, yPx: y, fontSizePx: size });
+    currentX += size * 0.52;
+  }
+}
+
+function extractPageLinks(layout: LayoutContext, page: PageSlice): LinkAnnotation[] {
+  const rootRect = layout.root.getBoundingClientRect();
+  const links: LinkAnnotation[] = [];
+  for (const anchor of Array.from(layout.root.querySelectorAll<HTMLAnchorElement>('a[href]'))) {
+    const href = anchor.href || anchor.getAttribute('href') || '';
+    if (!href || href.startsWith('javascript:')) continue;
+    for (const rect of Array.from(anchor.getClientRects())) {
+      const topInSource = rect.top - rootRect.top;
+      if (topInSource < page.startY || topInSource > page.endY) continue;
+      links.push({
+        pageIndex: page.index,
+        href,
+        xPx: layout.metrics.margin.left + layout.xOffsetPx + (rect.left - rootRect.left) * layout.zoom,
+        yPx: layout.metrics.margin.top + (topInSource - page.startY) * layout.zoom,
+        widthPx: rect.width * layout.zoom,
+        heightPx: rect.height * layout.zoom
+      });
+    }
+  }
+  return links;
+}
+
+function extractPageBookmarks(layout: LayoutContext, page: PageSlice): BookmarkItem[] {
+  const rootRect = layout.root.getBoundingClientRect();
+  const items: BookmarkItem[] = [];
+  for (const heading of Array.from(layout.root.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6,[data-pdf-bookmark]'))) {
+    const text = heading.getAttribute('data-pdf-bookmark') || elementText(heading);
+    if (!text) continue;
+    const rect = heading.getBoundingClientRect();
+    const topInSource = rect.top - rootRect.top;
+    if (topInSource < page.startY || topInSource > page.endY) continue;
+    const level = /^H([1-6])$/i.test(heading.tagName) ? Number(heading.tagName.slice(1)) : Number(heading.dataset.pdfBookmarkLevel || 1);
+    items.push({
+      pageIndex: page.index,
+      title: text,
+      yPx: layout.metrics.margin.top + (topInSource - page.startY) * layout.zoom,
+      level
+    });
+  }
+  return items;
+}
+
+class PdfBuilder {
+  private readonly objects: Array<Uint8Array | undefined> = [undefined];
+  private readonly encoder = new TextEncoder();
+
+  reserve(): number {
+    this.objects.push(undefined);
+    return this.objects.length - 1;
+  }
+
+  add(content: string | Uint8Array): number {
+    const id = this.reserve();
+    this.set(id, content);
+    return id;
+  }
+
+  set(id: number, content: string | Uint8Array): void {
+    this.objects[id] = typeof content === 'string' ? this.encoder.encode(content) : content;
+  }
+
+  stream(dict: string, data: string | Uint8Array): Uint8Array {
+    const bytes = typeof data === 'string' ? this.encoder.encode(data) : data;
+    const head = this.encoder.encode(`<< ${dict} /Length ${bytes.length} >>\nstream\n`);
+    const tail = this.encoder.encode('\nendstream');
+    const result = new Uint8Array(head.length + bytes.length + tail.length);
+    result.set(head, 0);
+    result.set(bytes, head.length);
+    result.set(tail, head.length + bytes.length);
+    return result;
+  }
+
+  build(rootId: number): Uint8Array {
+    const chunks: Uint8Array[] = [];
+    const header = this.encoder.encode('%PDF-1.7\n%\xFF\xFF\xFF\xFF\n');
+    chunks.push(header);
+    let offset = header.length;
+    const offsets = [0];
+
+    for (let id = 1; id < this.objects.length; id += 1) {
+      const object = this.objects[id];
+      if (!object) throw new Error(`PDF object ${id} was reserved but not written.`);
+      offsets[id] = offset;
+      const prefix = this.encoder.encode(`${id} 0 obj\n`);
+      const suffix = this.encoder.encode('\nendobj\n');
+      chunks.push(prefix, object, suffix);
+      offset += prefix.length + object.length + suffix.length;
+    }
+
+    const xrefOffset = offset;
+    const xrefRows = ['xref', `0 ${this.objects.length}`, '0000000000 65535 f '];
+    for (let id = 1; id < this.objects.length; id += 1) {
+      xrefRows.push(`${String(offsets[id]).padStart(10, '0')} 00000 n `);
+    }
+    const trailer = [
+      ...xrefRows,
+      'trailer',
+      `<< /Size ${this.objects.length} /Root ${rootId} 0 R >>`,
+      'startxref',
+      String(xrefOffset),
+      '%%EOF'
+    ].join('\n');
+    chunks.push(this.encoder.encode(trailer));
+
+    const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const output = new Uint8Array(total);
+    let pos = 0;
+    for (const chunk of chunks) {
+      output.set(chunk, pos);
+      pos += chunk.length;
+    }
+    return output;
+  }
+}
+
+interface FontSubset {
+  id: number;
+  fontObjectId: number;
+  charToCode: Map<string, number>;
+}
+
+function buildPdf(
+  pages: PdfPageInput[],
+  bookmarks: BookmarkItem[],
+  metrics: PageMetrics,
+  options: ResolvedHtmlToPdfProOptions
+): Uint8Array {
+  const pdf = new PdfBuilder();
+  const pagesObjectId = pdf.reserve();
+  const fontSubsets = createFonts(pdf, pages.flatMap((page) => page.glyphs.map((glyph) => glyph.text)));
+  const pageObjectIds: number[] = [];
+
+  for (const [index, page] of pages.entries()) {
+    const imageObjectId = pdf.add(
+      pdf.stream(
+        `/Type /XObject /Subtype /Image /Width ${page.imageWidth} /Height ${page.imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode`,
+        page.imageBytes
+      )
+    );
+
+    const annotationIds = page.links.map((link) => pdf.add(createLinkAnnotation(link, metrics)));
+    const contentObjectId = pdf.add(pdf.stream('', createContentStream(page, index, imageObjectId, fontSubsets, metrics)));
+    const annots = annotationIds.length ? `/Annots [${annotationIds.map((id) => `${id} 0 R`).join(' ')}]` : '';
+    const pageObjectId = pdf.add(
+      [
+        '<< /Type /Page',
+        `/Parent ${pagesObjectId} 0 R`,
+        `/MediaBox [0 0 ${pdfNumber(metrics.widthPt)} ${pdfNumber(metrics.heightPt)}]`,
+        `/Resources << /XObject << /Im${index + 1} ${imageObjectId} 0 R >> /Font << ${fontSubsets.map((font) => `/F${font.id} ${font.fontObjectId} 0 R`).join(' ')} >> >>`,
+        `/Contents ${contentObjectId} 0 R`,
+        annots,
+        '>>'
+      ].filter(Boolean).join('\n')
+    );
+    pageObjectIds.push(pageObjectId);
+  }
+
+  pdf.set(
+    pagesObjectId,
+    `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageObjectIds.length} >>`
+  );
+
+  const outlineRootId = options.bookmarks && bookmarks.length ? createOutlines(pdf, bookmarks, pageObjectIds, metrics) : undefined;
+  const catalogId = pdf.add(
+    `<< /Type /Catalog /Pages ${pagesObjectId} 0 R${outlineRootId ? ` /Outlines ${outlineRootId} 0 R /PageMode /UseOutlines` : ''} >>`
+  );
+  return pdf.build(catalogId);
+}
+
+function createContentStream(page: PdfPageInput, pageIndex: number, imageObjectId: number, fonts: FontSubset[], metrics: PageMetrics): string {
+  const commands: string[] = [
+    'q',
+    `${pdfNumber(metrics.widthPt)} 0 0 ${pdfNumber(metrics.heightPt)} 0 0 cm`,
+    `/Im${pageIndex + 1} Do`,
+    'Q'
+  ];
+
+  if (page.glyphs.length) {
+    commands.push('q');
+    for (const glyph of page.glyphs) {
+      const font = findFontSubset(fonts, glyph.text);
+      if (!font) continue;
+      const code = font.charToCode.get(glyph.text);
+      if (!code) continue;
+      const x = pxToPt(glyph.xPx, metrics.widthPx, metrics.widthPt);
+      const y = metrics.heightPt - pxToPt(glyph.yPx, metrics.heightPx, metrics.heightPt);
+      const fontSize = pxToPt(glyph.fontSizePx, metrics.widthPx, metrics.widthPt);
+      commands.push(
+        'BT',
+        '3 Tr',
+        `/F${font.id} ${pdfNumber(fontSize)} Tf`,
+        `1 0 0 1 ${pdfNumber(x)} ${pdfNumber(y)} Tm`,
+        `<${code.toString(16).padStart(2, '0').toUpperCase()}> Tj`,
+        'ET'
+      );
+    }
+    commands.push('Q');
+  }
+
+  void imageObjectId;
+  return commands.join('\n');
+}
+
+function createFonts(pdf: PdfBuilder, chars: string[]): FontSubset[] {
+  const unique = Array.from(new Set(chars.filter((char) => char.length > 0)));
+  const subsets: FontSubset[] = [];
+  for (let i = 0; i < unique.length; i += 255) {
+    const chunk = unique.slice(i, i + 255);
+    const id = subsets.length + 1;
+    const subset = createFontSubset(pdf, id, chunk);
+    subsets.push(subset);
+  }
+  if (!subsets.length) subsets.push(createFontSubset(pdf, 1, [' ']));
+  return subsets;
+}
+
+function createFontSubset(pdf: PdfBuilder, id: number, chars: string[]): FontSubset {
+  const charToCode = new Map<string, number>();
+  const charProcEntries: string[] = [];
+  const encodingNames: string[] = [];
+  const widths: string[] = [];
+
+  chars.forEach((char, index) => {
+    const code = index + 1;
+    charToCode.set(char, code);
+    const glyphName = `g${code}`;
+    const procId = pdf.add(pdf.stream('', '1000 0 d0'));
+    charProcEntries.push(`/${glyphName} ${procId} 0 R`);
+    encodingNames.push(`/${glyphName}`);
+    widths.push('1000');
+  });
+
+  const toUnicodeId = pdf.add(pdf.stream('', createToUnicodeCMap(chars)));
+  const fontObjectId = pdf.add(
+    [
+      '<< /Type /Font /Subtype /Type3',
+      `/Name /F${id}`,
+      '/FontBBox [0 -200 1000 1000]',
+      '/FontMatrix [0.001 0 0 0.001 0 0]',
+      `/CharProcs << ${charProcEntries.join(' ')} >>`,
+      `/Encoding << /Type /Encoding /Differences [1 ${encodingNames.join(' ')}] >>`,
+      `/FirstChar 1 /LastChar ${chars.length}`,
+      `/Widths [${widths.join(' ')}]`,
+      '/Resources << >>',
+      `/ToUnicode ${toUnicodeId} 0 R`,
+      '>>'
+    ].join('\n')
+  );
+
+  return { id, fontObjectId, charToCode };
+}
+
+function createToUnicodeCMap(chars: string[]): string {
+  const lines: string[] = [
+    '/CIDInit /ProcSet findresource begin',
+    '12 dict begin',
+    'begincmap',
+    '/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def',
+    '/CMapName /HtmlToPdfProUnicode def',
+    '/CMapType 2 def',
+    '1 begincodespacerange',
+    '<01> <FF>',
+    'endcodespacerange'
+  ];
+
+  for (let i = 0; i < chars.length; i += 100) {
+    const slice = chars.slice(i, i + 100);
+    lines.push(`${slice.length} beginbfchar`);
+    slice.forEach((char, offset) => {
+      const code = i + offset + 1;
+      lines.push(`<${code.toString(16).padStart(2, '0').toUpperCase()}> <${utf16BeHexWithoutBom(char)}>`);
+    });
+    lines.push('endbfchar');
+  }
+
+  lines.push('endcmap', 'CMapName currentdict /CMap defineresource pop', 'end', 'end');
+  return lines.join('\n');
+}
+
+function findFontSubset(fonts: FontSubset[], char: string): FontSubset | undefined {
+  return fonts.find((font) => font.charToCode.has(char));
+}
+
+function createLinkAnnotation(link: LinkAnnotation, metrics: PageMetrics): string {
+  const x1 = pxToPt(link.xPx, metrics.widthPx, metrics.widthPt);
+  const yTop = pxToPt(link.yPx, metrics.heightPx, metrics.heightPt);
+  const x2 = pxToPt(link.xPx + link.widthPx, metrics.widthPx, metrics.widthPt);
+  const yBottom = pxToPt(link.yPx + link.heightPx, metrics.heightPx, metrics.heightPt);
+  const y1 = metrics.heightPt - yBottom;
+  const y2 = metrics.heightPt - yTop;
+  return [
+    '<< /Type /Annot /Subtype /Link',
+    `/Rect [${pdfNumber(x1)} ${pdfNumber(y1)} ${pdfNumber(x2)} ${pdfNumber(y2)}]`,
+    '/Border [0 0 0]',
+    `/A << /S /URI /URI (${escapePdfLiteral(link.href)}) >>`,
+    '>>'
+  ].join('\n');
+}
+
+function createOutlines(pdf: PdfBuilder, bookmarks: BookmarkItem[], pageObjectIds: number[], metrics: PageMetrics): number {
+  const rootId = pdf.reserve();
+  const outlineIds = bookmarks.map(() => pdf.reserve());
+
+  bookmarks.forEach((bookmark, index) => {
+    const prev = index > 0 ? `/Prev ${outlineIds[index - 1]} 0 R` : '';
+    const next = index < outlineIds.length - 1 ? `/Next ${outlineIds[index + 1]} 0 R` : '';
+    const pageId = pageObjectIds[bookmark.pageIndex] ?? pageObjectIds[0];
+    const y = metrics.heightPt - pxToPt(bookmark.yPx, metrics.heightPx, metrics.heightPt);
+    void bookmark.level;
+    pdf.set(
+      outlineIds[index],
+      [
+        '<< /Title',
+        `<${utf16BeHex(bookmark.title)}>`,
+        `/Parent ${rootId} 0 R`,
+        prev,
+        next,
+        `/Dest [${pageId} 0 R /XYZ 0 ${pdfNumber(y)} null]`,
+        '>>'
+      ].filter(Boolean).join(' ')
+    );
+  });
+
+  pdf.set(
+    rootId,
+    `<< /Type /Outlines /First ${outlineIds[0]} 0 R /Last ${outlineIds[outlineIds.length - 1]} 0 R /Count ${outlineIds.length} >>`
+  );
+  return rootId;
 }
